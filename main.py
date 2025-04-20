@@ -16,6 +16,8 @@ class FlowchartApp:
         self.bloco_origem = None
         self.conectando = False
 
+        self.borda_original = {}  # Para armazenar a cor original da borda
+
         self.blocks = []
         self.ocupados = set()
 
@@ -102,6 +104,10 @@ class FlowchartApp:
                     self.arrastando = bloco
                     self.offset_x = x - coords[0]
                     self.offset_y = y - coords[1]
+
+                    # Aplica efeito visual
+                    self.borda_original[bloco["rect"]] = self.canvas.itemcget(bloco["rect"], "outline")
+                    self.canvas.itemconfig(bloco["rect"], outline="blue", width=3)
                     return
 
     def desenhar_linha(self, origem, destino):
@@ -173,6 +179,10 @@ class FlowchartApp:
             self.atualizar_setas()
 
     def finalizar_arrasto(self, event):
+        if self.arrastando:
+            original = self.borda_original.get(self.arrastando["rect"], "black")
+            self.canvas.itemconfig(self.arrastando["rect"], outline=original, width=1)
+
         self.arrastando = None
 
     def atualizar_setas(self):
@@ -249,19 +259,25 @@ class FlowchartApp:
                 self.setas = [
                     (s, o, d) for (s, o, d) in self.setas if o != item and d != item
                 ]
-                self.canvas.delete("all")
+                # Salva a cor de cada bloco antes de apagar
                 for bloco in self.blocks:
-                    self.canvas.create_rectangle(
+                    bloco["fill"] = self.canvas.itemcget(bloco["rect"], "fill")
+                    bloco["text"] = self.canvas.itemcget(bloco["label"], "text")
+
+                self.canvas.delete("all")
+
+                for bloco in self.blocks:
+                    bloco["rect"] = self.canvas.create_rectangle(
                         bloco["x"], bloco["y"],
                         bloco["x"] + bloco["width"], bloco["y"] + bloco["height"],
-                        fill=self.canvas.itemcget(bloco["rect"], "fill"), outline="black"
+                        fill=bloco["fill"], outline="black"
                     )
-                    bloco["rect"] = self.canvas.find_all()[-1]
                     bloco["label"] = self.canvas.create_text(
                         bloco["x"] + bloco["width"] // 2,
                         bloco["y"] + bloco["height"] // 2,
-                        text=self.canvas.itemcget(bloco["label"], "text")
+                        text=bloco["text"]
                     )
+
                 for linha, o, d in self.setas:
                     self.desenhar_linha(o, d)
 
