@@ -52,7 +52,7 @@ class FlowchartApp:
     def encontrar_proxima_posicao(self):
         x = 20
         y = self.margem_topo
-    
+
         # Procurar o primeiro espaço livre (x fixo, y variável)
         while True:
             ocupado = False
@@ -105,9 +105,51 @@ class FlowchartApp:
                     return
 
     def desenhar_linha(self, origem, destino):
-        linha = self.canvas.create_line(0, 0, 0, 0, arrow=tk.LAST, width=2)
+        coords_origem = self.canvas.coords(origem["rect"])
+        coords_destino = self.canvas.coords(destino["rect"])
+
+        ox1, oy1, ox2, oy2 = coords_origem
+        dx1, dy1, dx2, dy2 = coords_destino
+
+        # Centro dos blocos
+        centro_origem = ((ox1 + ox2) / 2, (oy1 + oy2) / 2)
+        centro_destino = ((dx1 + dx2) / 2, (dy1 + dy2) / 2)
+
+        # Diferença entre blocos
+        dx = centro_destino[0] - centro_origem[0]
+        dy = centro_destino[1] - centro_origem[1]
+
+        # Decide ponto de saída e entrada baseado na direção
+        if abs(dx) > abs(dy):  # Movimento mais horizontal
+            if dx > 0:
+                # seta da direita do origem para esquerda do destino
+                x1 = ox2
+                y1 = centro_origem[1]
+                x2 = dx1
+                y2 = centro_destino[1]
+            else:
+                # seta da esquerda do origem para direita do destino
+                x1 = ox1
+                y1 = centro_origem[1]
+                x2 = dx2
+                y2 = centro_destino[1]
+        else:  # Movimento mais vertical
+            if dy > 0:
+                # seta de baixo do origem para topo do destino
+                x1 = centro_origem[0]
+                y1 = oy2
+                x2 = centro_destino[0]
+                y2 = dy1
+            else:
+                # seta de cima do origem para base do destino
+                x1 = centro_origem[0]
+                y1 = oy1
+                x2 = centro_destino[0]
+                y2 = dy2
+
+        linha = self.canvas.create_line(x1, y1, x2, y2, arrow=tk.LAST, width=2)
         self.setas.append((linha, origem, destino))
-        self.atualizar_setas()
+
 
     def ativar_conexao(self):
         self.conectando = True
@@ -135,11 +177,43 @@ class FlowchartApp:
 
     def atualizar_setas(self):
         for seta_id, origem, destino in self.setas:
-            x1 = origem["x"] + origem["width"] // 2
-            y1 = origem["y"] + origem["height"]
-            x2 = destino["x"] + destino["width"] // 2
-            y2 = destino["y"]
+            coords_origem = self.canvas.coords(origem["rect"])
+            coords_destino = self.canvas.coords(destino["rect"])
+    
+            ox1, oy1, ox2, oy2 = coords_origem
+            dx1, dy1, dx2, dy2 = coords_destino
+    
+            centro_origem = ((ox1 + ox2) / 2, (oy1 + oy2) / 2)
+            centro_destino = ((dx1 + dx2) / 2, (dy1 + dy2) / 2)
+    
+            dx = centro_destino[0] - centro_origem[0]
+            dy = centro_destino[1] - centro_origem[1]
+    
+            if abs(dx) > abs(dy):  # movimento horizontal
+                if dx > 0:
+                    x1 = ox2
+                    y1 = centro_origem[1]
+                    x2 = dx1
+                    y2 = centro_destino[1]
+                else:
+                    x1 = ox1
+                    y1 = centro_origem[1]
+                    x2 = dx2
+                    y2 = centro_destino[1]
+            else:  # movimento vertical
+                if dy > 0:
+                    x1 = centro_origem[0]
+                    y1 = oy2
+                    x2 = centro_destino[0]
+                    y2 = dy1
+                else:
+                    x1 = centro_origem[0]
+                    y1 = oy1
+                    x2 = centro_destino[0]
+                    y2 = dy2
+    
             self.canvas.coords(seta_id, x1, y1, x2, y2)
+
 
 # Início do app
 root = tk.Tk()
