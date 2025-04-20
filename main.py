@@ -179,16 +179,16 @@ class FlowchartApp:
         for seta_id, origem, destino in self.setas:
             coords_origem = self.canvas.coords(origem["rect"])
             coords_destino = self.canvas.coords(destino["rect"])
-    
+
             ox1, oy1, ox2, oy2 = coords_origem
             dx1, dy1, dx2, dy2 = coords_destino
-    
+
             centro_origem = ((ox1 + ox2) / 2, (oy1 + oy2) / 2)
             centro_destino = ((dx1 + dx2) / 2, (dy1 + dy2) / 2)
-    
+
             dx = centro_destino[0] - centro_origem[0]
             dy = centro_destino[1] - centro_origem[1]
-    
+
             if abs(dx) > abs(dy):  # movimento horizontal
                 if dx > 0:
                     x1 = ox2
@@ -211,9 +211,81 @@ class FlowchartApp:
                     y1 = oy1
                     x2 = centro_destino[0]
                     y2 = dy2
-    
+
             self.canvas.coords(seta_id, x1, y1, x2, y2)
 
+        # Seleção de itens
+        self.item_selecionado = None
+        self.canvas.bind("<Button-1>", self.selecionar_item, add="+")
+        self.root.bind("<Delete>", self.deletar_item)
+
+    def selecionar_item(self, event):
+        x, y = self.canvas.canvasx(event.x), self.canvas.canvasy(event.y)
+        self.item_selecionado = None
+
+        # Verifica se clicou em uma seta
+        for seta_id, origem, destino in self.setas:
+            coords = self.canvas.coords(seta_id)
+            if self._clicou_em_linha(x, y, coords):
+                self.item_selecionado = ("seta", seta_id)
+                return
+
+        # Verifica se clicou em um bloco
+        for bloco in self.blocks:
+            coords = self.canvas.coords(bloco["rect"])
+            if coords[0] <= x <= coords[2] and coords[1] <= y <= coords[3]:
+                self.item_selecionado = ("bloco", bloco)
+                return
+
+    def deletar_item(self, event):
+        if self.item_selecionado:
+            tipo, item = self.item_selecionado
+            if tipo == "bloco":
+                self.canvas.delete(item["rect"])
+                self.canvas.delete(item["label"])
+                self.blocks.remove(item)
+                self.ocupados.discard((item["x"], item["y"]))
+                # Remove setas conectadas a esse bloco
+                self.setas = [
+                    (s, o, d) for (s, o, d) in self.setas if o != item and d != item
+                ]
+                self.canvas.delete("all")
+                for bloco in self.blocks:
+                    self.canvas.create_rectangle(
+                        bloco["x"], bloco["y"],
+                        bloco["x"] + bloco["width"], bloco["y"] + bloco["height"],
+                        fill=self.canvas.itemcget(bloco["rect"], "fill"), outline="black"
+                    )
+                    bloco["rect"] = self.canvas.find_all()[-1]
+                    bloco["label"] = self.canvas.create_text(
+                        bloco["x"] + bloco["width"] // 2,
+                        bloco["y"] + bloco["height"] // 2,
+                        text=self.canvas.itemcget(bloco["label"], "text")
+                    )
+                for linha, o, d in self.setas:
+                    self.desenhar_linha(o, d)
+
+            elif tipo == "seta":
+                self.canvas.delete(item)
+                self.setas = [s for s in self.setas if s[0] != item]
+
+            self.item_selecionado = None
+
+    def _clicou_em_linha(self, x, y, coords, margem=5):
+        """Verifica se o clique está próximo da linha"""
+        if len(coords) < 4:
+            return False
+        x1, y1, x2, y2 = coords[:4]
+        if min(x1, x2) - margem <= x <= max(x1, x2) + margem and min(y1, y2) - margem <= y <= max(y1, y2) + margem:
+            # Aproximação simples
+            dx, dy = x2 - x1, y2 - y1
+            if dx == 0:
+                return abs(x - x1) < margem
+            m = dy / dx
+            b = y1 - m * x1
+            y_estimado = m * x + b
+            return abs(y - y_estimado) < margem
+        return False
 
 # Início do app
 root = tk.Tk()
