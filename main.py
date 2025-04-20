@@ -44,6 +44,9 @@ class FlowchartApp:
         btn_conectar.bind("<Button-1>", lambda e: self.ativar_conexao())
 
         self.arrastando = None
+        self.item_selecionado = None
+        self.borda_selecionada = None
+
         self.offset_x = 0
         self.offset_y = 0
 
@@ -88,6 +91,10 @@ class FlowchartApp:
     def canvas_clique(self, event):
         x, y = self.canvas.canvasx(event.x), self.canvas.canvasy(event.y)
 
+        self.arrastando = None
+        self.item_selecionado = None
+        self.remover_destaque()
+
         for bloco in self.blocks:
             coords = self.canvas.coords(bloco["rect"])
             if coords[0] <= x <= coords[2] and coords[1] <= y <= coords[3]:
@@ -104,10 +111,8 @@ class FlowchartApp:
                     self.arrastando = bloco
                     self.offset_x = x - coords[0]
                     self.offset_y = y - coords[1]
-
-                    # Aplica efeito visual
-                    self.borda_original[bloco["rect"]] = self.canvas.itemcget(bloco["rect"], "outline")
-                    self.canvas.itemconfig(bloco["rect"], outline="blue", width=3)
+                    self.item_selecionado = ("bloco", bloco)
+                    self.destacar_bloco(bloco)
                     return
 
     def desenhar_linha(self, origem, destino):
@@ -177,6 +182,9 @@ class FlowchartApp:
             self.arrastando["y"] = novo_y1
 
             self.atualizar_setas()
+        if self.borda_selecionada:
+            self.canvas.coords(self.borda_selecionada, novo_x1 - 2, novo_y1 - 2, novo_x2 + 2, novo_y2 + 2)
+
 
     def finalizar_arrasto(self, event):
         if self.arrastando:
@@ -225,7 +233,7 @@ class FlowchartApp:
             self.canvas.coords(seta_id, x1, y1, x2, y2)
 
         # Seleção de itens
-        self.item_selecionado = None
+        #self.item_selecionado = None
         self.canvas.bind("<Button-1>", self.selecionar_item, add="+")
         self.root.bind("<Delete>", self.deletar_item)
 
@@ -302,6 +310,30 @@ class FlowchartApp:
             y_estimado = m * x + b
             return abs(y - y_estimado) < margem
         return False
+    
+    def selecionar_bloco(self, bloco):
+        # Remove borda anterior
+        if self.borda_selecionada:
+            self.canvas.delete(self.borda_selecionada)
+            self.borda_selecionada = None
+
+        self.item_selecionado = ("bloco", bloco)
+
+        x1 = bloco["x"] - 2
+        y1 = bloco["y"] - 2
+        x2 = bloco["x"] + bloco["width"] + 2
+        y2 = bloco["y"] + bloco["height"] + 2
+
+        self.borda_selecionada = self.canvas.create_rectangle(x1, y1, x2, y2, outline="blue", width=2, dash=(4, 2))
+        self.canvas.tag_lower(self.borda_selecionada, bloco["rect"])
+    
+    def destacar_bloco(self, bloco):
+        self.selecionar_bloco(bloco)
+
+    def remover_destaque(self):
+        if self.borda_selecionada:
+            self.canvas.delete(self.borda_selecionada)
+            self.borda_selecionada = None
 
 # Início do app
 root = tk.Tk()
