@@ -90,11 +90,11 @@ class FlowchartApp:
 
     def canvas_clique(self, event):
         x, y = self.canvas.canvasx(event.x), self.canvas.canvasy(event.y)
-
+    
         self.arrastando = None
-        self.item_selecionado = None
-        self.remover_destaque()
-
+    
+        clicou_em_algum_bloco = False
+    
         for bloco in self.blocks:
             coords = self.canvas.coords(bloco["rect"])
             if coords[0] <= x <= coords[2] and coords[1] <= y <= coords[3]:
@@ -113,7 +113,13 @@ class FlowchartApp:
                     self.offset_y = y - coords[1]
                     self.item_selecionado = ("bloco", bloco)
                     self.destacar_bloco(bloco)
+                    clicou_em_algum_bloco = True
                     return
+    
+        # ⬇️ Se não clicou em nenhum bloco, faz a seleção (para resetar seta)
+        if not clicou_em_algum_bloco:
+            self.selecionar_item(event)
+
 
     def desenhar_linha(self, origem, destino):
         coords_origem = self.canvas.coords(origem["rect"])
@@ -182,8 +188,10 @@ class FlowchartApp:
             self.arrastando["y"] = novo_y1
 
             self.atualizar_setas()
-        if self.borda_selecionada:
-            self.canvas.coords(self.borda_selecionada, novo_x1 - 2, novo_y1 - 2, novo_x2 + 2, novo_y2 + 2)
+
+            if self.borda_selecionada:
+                self.canvas.coords(self.borda_selecionada, novo_x1 - 2, novo_y1 - 2, novo_x2 + 2, novo_y2 + 2)
+
 
 
     def finalizar_arrasto(self, event):
@@ -239,6 +247,16 @@ class FlowchartApp:
 
     def selecionar_item(self, event):
         x, y = self.canvas.canvasx(event.x), self.canvas.canvasy(event.y)
+
+        # Resetar cor da última seta selecionada (caso exista)
+        if self.item_selecionado:
+            tipo, item = self.item_selecionado
+            if tipo == "seta":
+                self.canvas.itemconfig(item, fill="black")
+            elif tipo == "bloco" and self.borda_selecionada:
+                self.canvas.delete(self.borda_selecionada)
+                self.borda_selecionada = None
+
         self.item_selecionado = None
 
         # Verifica se clicou em uma seta
@@ -246,6 +264,7 @@ class FlowchartApp:
             coords = self.canvas.coords(seta_id)
             if self._clicou_em_linha(x, y, coords):
                 self.item_selecionado = ("seta", seta_id)
+                self.canvas.itemconfig(seta_id, fill="blue")  # ← deixa azul ao selecionar
                 return
 
         # Verifica se clicou em um bloco
@@ -253,7 +272,11 @@ class FlowchartApp:
             coords = self.canvas.coords(bloco["rect"])
             if coords[0] <= x <= coords[2] and coords[1] <= y <= coords[3]:
                 self.item_selecionado = ("bloco", bloco)
+                self.destacar_bloco(bloco)
                 return
+
+
+
 
     def deletar_item(self, event):
         if self.item_selecionado:
@@ -334,6 +357,11 @@ class FlowchartApp:
         if self.borda_selecionada:
             self.canvas.delete(self.borda_selecionada)
             self.borda_selecionada = None
+
+        if self.item_selecionado and self.item_selecionado[0] == "seta":
+            seta_antiga_id = self.item_selecionado[1]
+            self.canvas.itemconfig(seta_antiga_id, fill="black")  # volta a cor original
+
 
 # Início do app
 root = tk.Tk()
