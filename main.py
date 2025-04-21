@@ -10,9 +10,23 @@ class FlowchartApp:
     def __init__(self, root):
         self.root = root
         self.root.title("Flowchart Macro Editor")
+        # Define o tamanho da janela
+        largura_janela = 1400
+        altura_janela = 700
+
+        # Pega o tamanho da tela
+        largura_tela = root.winfo_screenwidth()
+        altura_tela = root.winfo_screenheight()
+
+        # Calcula a posição x e y para centralizar
+        pos_x = (largura_tela // 2) - (largura_janela // 2)
+        pos_y = (altura_tela // 2) - (altura_janela // 2)
+
+        # Define a geometria com posição calculada
+        root.geometry(f"{largura_janela}x{altura_janela}+{pos_x}+{pos_y}")
 
         # Frame de topo
-        self.top_frame = tk.Frame(root, height=50, bg="#e0e0e0")
+        self.top_frame = tk.Frame(root, height=50, bg="#e0e0e0", )
         self.top_frame.pack(side="top", fill="x")
 
         # Frame de menu lateral
@@ -20,8 +34,8 @@ class FlowchartApp:
         self.menu_frame.pack(side="left", fill="y")
 
         # Canvas
-        self.canvas = tk.Canvas(root, bg="white")
-        self.canvas.pack(side="right", fill="both", expand=True)
+        self.canvas = tk.Canvas(root, bg="#c3cfe2", bd=0, highlightthickness=0)  # azul acinzentado suave
+        self.canvas.pack(side="right", fill="both", expand=True, padx=6, pady=6)
 
         # Gerenciadores
         self.blocos = BlocoManager(self.canvas, self)
