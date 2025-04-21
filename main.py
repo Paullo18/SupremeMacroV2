@@ -25,15 +25,21 @@ class FlowchartApp:
         self.icones = {}
 
         # Lista dos blocos com seus arquivos
-        blocos_icone = [
+        botoes_icone = [
             ("Clique", "click_icon.png"),
             ("Texto", "text_icon.png"),
             ("Delay", "delay_icon.png"),
             ("Label", "label_icon.png"),
             ("GoTo", "goto_icon.png"),
+            ("Se Imagem", "ifimage_icon.png"),
+            ("OCR", "ocr_icon.png"),
+            ("OCR duplo", "doubleocr_icon.png"),
+            ("Loop", "loop_icon.png"),
         ]
+
+        self.icones_menu = {}  # Para manter referências
         
-        for nome, arquivo in blocos_icone:
+        for nome, arquivo in botoes_icone:
             caminho = os.path.join("icons", arquivo)
             if os.path.exists(caminho):
                 img = Image.open(caminho).resize((112, 40), Image.Resampling.LANCZOS)
