@@ -35,19 +35,19 @@ class BlocoManager:
     def adicionar_bloco(self, nome, cor):
         x, y = self.encontrar_proxima_posicao()
         self.ocupados.add((x, y))
-    
+
         nome_arquivo = self._mapear_nome_para_icone(nome)
         caminho_icone = os.path.join("icons", nome_arquivo)
-    
+
         # Cria retângulo invisível só para detecção de clique
         rect = self.canvas.create_rectangle(
             x, y, x + self.block_width, y + self.block_height,
             outline="", fill=""
         )
-    
+
         # 🔧 DEFINE O ID ANTES DE USAR
         bloco_id = f"{nome}_{len(self.blocks)}"
-    
+
         # Carrega imagem e insere
         if os.path.exists(caminho_icone):
             img = Image.open(caminho_icone).resize((self.block_width, self.block_height), Image.Resampling.LANCZOS)
@@ -56,7 +56,7 @@ class BlocoManager:
             icon = self.canvas.create_image(x, y, anchor="nw", image=tk_img)
         else:
             icon = None
-    
+
         bloco = {
             "rect": rect,
             "icon": icon,
@@ -68,7 +68,7 @@ class BlocoManager:
             "text": nome,
             "bloco_id": bloco_id  # ← USAR o nome correto da chave
         }
-    
+
         self.blocks.append(bloco)
         return bloco
 
@@ -104,14 +104,8 @@ class BlocoManager:
             coords = self.canvas.coords(bloco["rect"])
             if coords[0] <= x <= coords[2] and coords[1] <= y <= coords[3]:
                 if self.app.setas.conectando:
-                    if not self.app.setas.bloco_origem:
-                        self.app.setas.bloco_origem = bloco
-                        return
-                    else:
-                        self.app.setas.desenhar_linha(self.app.setas.bloco_origem, bloco)
-                        self.app.setas.bloco_origem = None
-                        self.app.setas.conectando = False
-                        return
+                    self.app.setas.clicar_em_bloco(bloco)
+                    return
                 else:
                     self.arrastando = bloco
 

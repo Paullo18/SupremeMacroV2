@@ -11,6 +11,20 @@ class SetaManager:
         self.conectando = False
         self.ultima_seta_selecionada = None  # ← guarda referência da última seta azul
 
+        self.linha_temporaria = None
+
+    def atualizar_linha_temporaria(self, event):
+        if self.linha_temporaria and self.bloco_origem:
+            x1, y1 = self._centro_bloco(self.bloco_origem)
+            x2, y2 = self.canvas.canvasx(event.x), self.canvas.canvasy(event.y)
+            self.canvas.coords(self.linha_temporaria, x1, y1, x2, y2)
+
+
+    def atualizar_linha_temp_evento(self, event):
+        x = self.canvas.canvasx(event.x)
+        y = self.canvas.canvasy(event.y)
+        self.atualizar_linha_temp(x, y)
+
     def _mapear_nome_para_icone(self, nome):
         nome = nome.strip().lower()
         mapa = {
@@ -38,10 +52,22 @@ class SetaManager:
         if self.conectando:
             if not self.bloco_origem:
                 self.bloco_origem = bloco
+                x, y = self._centro_bloco(bloco)
+                self.linha_temporaria = self.canvas.create_line(x, y, x, y, fill="gray", dash=(4, 2), width=2)
+                self.canvas.bind("<Motion>", self.atualizar_linha_temporaria)
             else:
+                self.canvas.unbind("<Motion>")
+                if self.linha_temporaria:
+                    self.canvas.delete(self.linha_temporaria)
+                    self.linha_temporaria = None
                 self.desenhar_linha(self.bloco_origem, bloco)
-                self.conectando = False
                 self.bloco_origem = None
+                self.conectando = False
+
+    def _centro_bloco(self, bloco):
+        coords = self.canvas.coords(bloco["rect"])
+        x1, y1, x2, y2 = coords
+        return (x1 + x2) / 2, (y1 + y2) / 2
 
     def desenhar_linha(self, origem, destino):
         coords_origem = self.canvas.coords(origem["rect"])
@@ -173,27 +199,27 @@ class SetaManager:
     def deletar_item(self, event):
         if self.blocos.app.item_selecionado:
             tipo, item = self.blocos.app.item_selecionado
-    
+
             if tipo == "bloco":
                 self.canvas.delete(item["rect"])
                 if item.get("icon"):
                     self.canvas.delete(item["icon"])
-    
+
                 # Remove a borda se existir
                 if self.blocos.borda_selecionada:
                     self.canvas.delete(self.blocos.borda_selecionada)
                     self.blocos.borda_selecionada = None
-    
+
                 # Remove imagem do cache
                 bloco_id = item.get("id")
                 if bloco_id and bloco_id in self.blocos.imagens:
                     del self.blocos.imagens[bloco_id]
-    
+
                 # Remove bloco
                 if item in self.blocos.blocks:
                     self.blocos.blocks.remove(item)
                 self.blocos.ocupados.discard((item["x"], item["y"]))
-    
+
                 # Remove setas conectadas
                 novas_setas = []
                 for seta_id, origem, destino in self.setas:
@@ -202,11 +228,11 @@ class SetaManager:
                     else:
                         novas_setas.append((seta_id, origem, destino))
                 self.setas = novas_setas
-    
+
             elif tipo == "seta":
                 self.canvas.delete(item)
                 self.setas = [s for s in self.setas if s[0] != item]
-    
+
             self.blocos.app.item_selecionado = None
 
 
