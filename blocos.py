@@ -8,8 +8,8 @@ class BlocoManager:
         self.app = app
         self.blocks = []
         self.ocupados = set()
-        self.block_width = 60
-        self.block_height = 60
+        self.block_width = 112
+        self.block_height = 40
         self.margem_topo = 20
         self.espaco_vertical = 20
         self.arrastando = None
@@ -66,10 +66,12 @@ class BlocoManager:
             "height": self.block_height,
             "fill": cor,
             "text": nome,
-            "id": bloco_id  # ← SALVA O ID DENTRO DO BLOCO
+            "bloco_id": bloco_id  # ← USAR o nome correto da chave
         }
+    
         self.blocks.append(bloco)
         return bloco
+
 
 
     def _mapear_nome_para_icone(self, nome):

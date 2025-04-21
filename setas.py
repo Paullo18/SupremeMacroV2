@@ -173,47 +173,79 @@ class SetaManager:
     def deletar_item(self, event):
         if self.blocos.app.item_selecionado:
             tipo, item = self.blocos.app.item_selecionado
-
+    
             if tipo == "bloco":
                 self.canvas.delete(item["rect"])
                 if item.get("icon"):
                     self.canvas.delete(item["icon"])
-
-                # Remover referência da imagem para esse bloco
-                bloco_id = item.get("bloco_id")
+    
+                # Remove a borda se existir
+                if self.blocos.borda_selecionada:
+                    self.canvas.delete(self.blocos.borda_selecionada)
+                    self.blocos.borda_selecionada = None
+    
+                # Remove imagem do cache
+                bloco_id = item.get("id")
                 if bloco_id and bloco_id in self.blocos.imagens:
                     del self.blocos.imagens[bloco_id]
-
-                self.blocos.blocks.remove(item)
+    
+                # Remove bloco
+                if item in self.blocos.blocks:
+                    self.blocos.blocks.remove(item)
                 self.blocos.ocupados.discard((item["x"], item["y"]))
-                self.remover_setas_de_bloco(item)
-
-                self.canvas.delete("all")
-
-                for bloco in self.blocos.blocks:
-                    bloco["rect"] = self.canvas.create_rectangle(
-                        bloco["x"], bloco["y"],
-                        bloco["x"] + bloco["width"], bloco["y"] + bloco["height"],
-                        fill="", outline=""
-                    )
-
-                    # Recria a imagem do ícone corretamente
-                    bloco_id = bloco.get("bloco_id")
-                    nome_arquivo = self._mapear_nome_para_icone(bloco["text"])
-                    img_path = os.path.join("icons", nome_arquivo)
-                    if os.path.exists(img_path):
-                        img = Image.open(img_path).resize((bloco["width"], bloco["height"]), Image.Resampling.LANCZOS)
-                        tk_img = ImageTk.PhotoImage(img)
-                        self.blocos.imagens[bloco["id"]] = tk_img
-                        bloco["icon"] = self.canvas.create_image(bloco["x"], bloco["y"], anchor="nw", image=tk_img)
-
-                for _, origem, destino in self.setas:
-                    self.desenhar_linha(origem, destino)
-
+    
+                # Remove setas conectadas
+                novas_setas = []
+                for seta_id, origem, destino in self.setas:
+                    if origem == item or destino == item:
+                        self.canvas.delete(seta_id)
+                    else:
+                        novas_setas.append((seta_id, origem, destino))
+                self.setas = novas_setas
+    
             elif tipo == "seta":
                 self.canvas.delete(item)
                 self.setas = [s for s in self.setas if s[0] != item]
-
+    
             self.blocos.app.item_selecionado = None
 
 
+
+    def _desenhar_linha_visual(self, origem, destino):
+        """Desenha a linha visualmente sem adicionar novamente à lista de setas"""
+        coords_origem = self.canvas.coords(origem["rect"])
+        coords_destino = self.canvas.coords(destino["rect"])
+    
+        ox1, oy1, ox2, oy2 = coords_origem
+        dx1, dy1, dx2, dy2 = coords_destino
+    
+        centro_origem = ((ox1 + ox2) / 2, (oy1 + oy2) / 2)
+        centro_destino = ((dx1 + dx2) / 2, (dy1 + dy2) / 2)
+    
+        dx = centro_destino[0] - centro_origem[0]
+        dy = centro_destino[1] - centro_origem[1]
+    
+        if abs(dx) > abs(dy):
+            if dx > 0:
+                x1 = ox2
+                y1 = centro_origem[1]
+                x2 = dx1
+                y2 = centro_destino[1]
+            else:
+                x1 = ox1
+                y1 = centro_origem[1]
+                x2 = dx2
+                y2 = centro_destino[1]
+        else:
+            if dy > 0:
+                x1 = centro_origem[0]
+                y1 = oy2
+                x2 = centro_destino[0]
+                y2 = dy1
+            else:
+                x1 = centro_origem[0]
+                y1 = oy1
+                x2 = centro_destino[0]
+                y2 = dy2
+    
+        self.canvas.create_line(x1, y1, x2, y2, arrow="last", width=2)
