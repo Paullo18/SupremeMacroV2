@@ -1,4 +1,6 @@
 from util import clicou_em_linha
+import os
+from PIL import Image, ImageTk
 
 class SetaManager:
     def __init__(self, canvas, blocos):
@@ -9,6 +11,25 @@ class SetaManager:
         self.conectando = False
         self.ultima_seta_selecionada = None  # ← guarda referência da última seta azul
 
+    def _mapear_nome_para_icone(self, nome):
+        nome = nome.strip().lower()
+        mapa = {
+            "clique": "click_icon.png",
+            "texto": "text_icon.png",
+            "delay": "delay_icon.png",
+            "label": "label_icon.png",
+            "goto": "goto_icon.png",
+            "ocr": "ocr_icon.png",
+            "ocr duplo": "doubleocr_icon.png",
+            "se imagem": "ifimage_icon.png",
+            "loop": "loop_icon.png",
+            "fim loop": "endloop_icon.png",
+            "sair loop": "exit_loop.png",
+            "fim se": "endif_icon.png",
+            "se nao": "else_icon.png"
+        }
+        return mapa.get(nome, "default.png")
+    
     def ativar_conexao(self):
         self.conectando = True
         self.bloco_origem = None
@@ -155,15 +176,17 @@ class SetaManager:
 
             if tipo == "bloco":
                 self.canvas.delete(item["rect"])
-                self.canvas.delete(item["label"])
+                if item.get("icon"):
+                    self.canvas.delete(item["icon"])
+
+                # Remover referência da imagem para esse bloco
+                bloco_id = item.get("bloco_id")
+                if bloco_id and bloco_id in self.blocos.imagens:
+                    del self.blocos.imagens[bloco_id]
+
                 self.blocos.blocks.remove(item)
                 self.blocos.ocupados.discard((item["x"], item["y"]))
-
                 self.remover_setas_de_bloco(item)
-
-                for bloco in self.blocos.blocks:
-                    bloco["fill"] = self.canvas.itemcget(bloco["rect"], "fill")
-                    bloco["text"] = self.canvas.itemcget(bloco["label"], "text")
 
                 self.canvas.delete("all")
 
@@ -171,13 +194,18 @@ class SetaManager:
                     bloco["rect"] = self.canvas.create_rectangle(
                         bloco["x"], bloco["y"],
                         bloco["x"] + bloco["width"], bloco["y"] + bloco["height"],
-                        fill=bloco["fill"], outline="black"
+                        fill="", outline=""
                     )
-                    bloco["label"] = self.canvas.create_text(
-                        bloco["x"] + bloco["width"] // 2,
-                        bloco["y"] + bloco["height"] // 2,
-                        text=bloco["text"]
-                    )
+
+                    # Recria a imagem do ícone corretamente
+                    bloco_id = bloco.get("bloco_id")
+                    nome_arquivo = self._mapear_nome_para_icone(bloco["text"])
+                    img_path = os.path.join("icons", nome_arquivo)
+                    if os.path.exists(img_path):
+                        img = Image.open(img_path).resize((bloco["width"], bloco["height"]), Image.Resampling.LANCZOS)
+                        tk_img = ImageTk.PhotoImage(img)
+                        self.blocos.imagens[bloco["id"]] = tk_img
+                        bloco["icon"] = self.canvas.create_image(bloco["x"], bloco["y"], anchor="nw", image=tk_img)
 
                 for _, origem, destino in self.setas:
                     self.desenhar_linha(origem, destino)
@@ -187,3 +215,5 @@ class SetaManager:
                 self.setas = [s for s in self.setas if s[0] != item]
 
             self.blocos.app.item_selecionado = None
+
+

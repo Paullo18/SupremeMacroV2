@@ -3,6 +3,7 @@ from blocos import BlocoManager
 from setas import SetaManager
 from eventos import bind_eventos
 from util import clicou_em_linha
+from PIL import Image, ImageTk
 
 class FlowchartApp:
     def __init__(self, root):
