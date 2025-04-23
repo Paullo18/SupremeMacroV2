@@ -333,8 +333,22 @@ class BlocoManager:
         self.app.itens_selecionados.clear()
 
     def recortar_selecionados(self, event=None):
-        # por ora: apenas deleta; clipboard poderia ser salvo aqui
+        """Ctrl+X – coloca os blocos selecionados no clipboard e os remove."""
+        # 1 – pega todos os blocos atualmente selecionados
+        blocos = [b for t, b in self.app.itens_selecionados if t == "bloco"]
+        if not blocos:
+            return
+
+        # 2 – gera dados relativos (mesma lógica de copiar)
+        min_x = min(b["x"] for b in blocos)
+        min_y = min(b["y"] for b in blocos)
+        BlocoManager._clipboard = [
+            (b["text"], b["x"] - min_x, b["y"] - min_y) for b in blocos
+        ]
+
+        # 3 – remove realmente os itens  (isso já grava snapshot para undo)
         self.deletar_selecionados()
+
 
     def desfazer(self, event=None):
         if not self._undo_stack:
