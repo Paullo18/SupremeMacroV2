@@ -311,3 +311,4 @@ class SetaManager:
             elif tipo == "seta":
                 self.canvas.itemconfig(item, fill="black")
         self.blocos.app.itens_selecionados.clear()
+    limpar_selecao = _limpar_selecao

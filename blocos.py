@@ -32,12 +32,24 @@ class BlocoManager:
         # cache de imagens para evitar GC
         self.imagens = {}
 
+        # ▼ pilhas de desfazer/refazer
+        self._undo_stack = []
+        self._redo_stack = []
+        # ▼ usado para arrastar grupo
+        self._drag_group = None   # lista de blocos movidos juntos
+
+        self._is_restoring = False   # evita snapshots enquanto restaura
+
+        self._has_moved = False
+
     def finalizar_arrasto(self, event):
-        # encerra arrasto OU seleção
+
+         # rotina já existente
         if self.arrastando:
             self.arrastando = None
         elif self.selecao_iniciada:
             self.finalizar_selecao_area(event)
+        self._drag_group = None
 
 
     def encontrar_proxima_posicao(self):
@@ -49,6 +61,11 @@ class BlocoManager:
             y += self.block_height + self.espaco_vertical
 
     def adicionar_bloco(self, nome, cor):
+        # só registra snapshot se NÃO estiver restaurando
+        if not self._is_restoring:
+            self._undo_stack.append(self._snapshot())
+            self._redo_stack.clear()
+
         x, y = self.encontrar_proxima_posicao()
         self.ocupados.add((x, y))
 
@@ -104,31 +121,56 @@ class BlocoManager:
 
     def canvas_clique(self, event):
         x, y = self.canvas.canvasx(event.x), self.canvas.canvasy(event.y)
-
-        # resetar estado de arrasto e remover destaque antigo
+        ctrl = event.state & 0x0004 
+        
         self.arrastando = None
-        if self.borda_selecionada:
-            self.canvas.delete(self.borda_selecionada)
-            self.borda_selecionada = None
 
         # teste de clique em blocos
         for bloco in self.blocks:
             x1, y1, x2, y2 = self.canvas.coords(bloco["rect"])
             if x1 <= x <= x2 and y1 <= y <= y2:
-                # inicia arrasto
+                # ---------- inicia arrasto ----------
                 self.arrastando = bloco
+                self._has_moved = False
                 self.offset_x = x - bloco["x"]
                 self.offset_y = y - bloco["y"]
 
-                # criar borda de seleção
-                self.borda_selecionada = self.canvas.create_rectangle(
-                    bloco["x"] - 2, bloco["y"] - 2,
-                    bloco["x"] + bloco["width"] + 2,
-                    bloco["y"] + bloco["height"] + 2,
-                    outline="blue", width=2, dash=(4, 2)
-                )
-                self.canvas.tag_lower(self.borda_selecionada, bloco["rect"])
-                return
+                # garante que a borda do bloco permaneça
+                if not bloco.get("borda"):
+                    bloco["borda"] = self.canvas.create_rectangle(
+                        bloco["x"] - 2, bloco["y"] - 2,
+                        bloco["x"] + bloco["width"] + 2,
+                        bloco["y"] + bloco["height"] + 2,
+                        outline="blue", width=2, dash=(4, 2)
+                    )
+                    self.canvas.tag_lower(bloco["borda"], bloco["rect"])
+                self.borda_selecionada = bloco["borda"]
+
+                # monta grupo a arrastar
+                if ("bloco", bloco) not in self.app.itens_selecionados:
+                    if not ctrl:          # clique normal → seleção única
+                        self.app.setas.limpar_selecao()
+                        self.app.itens_selecionados = [("bloco", bloco)]
+                    else:                 # Ctrl-click adiciona
+                        self.app.itens_selecionados.append(("bloco", bloco))
+
+                self._drag_group = [b for t, b in self.app.itens_selecionados if t == "bloco"]
+
+                return "break"   # impede que o clique caia no SetaManager
+            
+            # 2) Clique em área vazia → inicia retângulo de seleção
+        if self.borda_selecionada:
+            self.canvas.delete(self.borda_selecionada)
+            self.borda_selecionada = None
+
+        self.selecao_iniciada = True
+        self.sel_start_x, self.sel_start_y = x, y
+        self.sel_rect_id = self.canvas.create_rectangle(
+            x, y, x, y, outline="blue", dash=(2, 2)
+        )
+        self.app.setas.limpar_selecao()
+        return "break"
+            
 
         # clique fora de qualquer bloco → inicia seleção por área
         self.selecao_iniciada = True
@@ -139,15 +181,20 @@ class BlocoManager:
         )
         # limpa seleção anterior (usa o helper que já existe no SetaManager)
         self.app.setas._limpar_selecao()
-        return
+        return "break"
 
     def mover_bloco(self, event):
-        if not self.arrastando:
-            # caso seja apenas uma seleção por área
+        if self.selecao_iniciada:
             self.atualizar_selecao_area(event)
             return
+        if not self.arrastando:
+            return
+        
+        if not self._has_moved and not self._is_restoring:
+            self._undo_stack.append(self._snapshot())
+            self._redo_stack.clear()
+            self._has_moved = True
 
-        # --- cálculo da nova posição ---
         x = self.canvas.canvasx(event.x)
         y = self.canvas.canvasy(event.y)
         new_x = x - self.offset_x
@@ -155,31 +202,22 @@ class BlocoManager:
         dx = new_x - self.arrastando["x"]
         dy = new_y - self.arrastando["y"]
 
-        bloco = self.arrastando
-        bx1 = bloco["x"] + dx
-        by1 = bloco["y"] + dy
-        bx2 = bx1 + bloco["width"]
-        by2 = by1 + bloco["height"]
+        alvos = self._drag_group if self._drag_group else [self.arrastando]
+        for bloco in alvos:
+            bx1 = bloco["x"] + dx
+            by1 = bloco["y"] + dy
+            bx2 = bx1 + bloco["width"]
+            by2 = by1 + bloco["height"]
 
-        # move retângulo principal e ícone
-        self.canvas.coords(bloco["rect"], bx1, by1, bx2, by2)
-        if bloco.get("icon"):
-            self.canvas.coords(bloco["icon"], bx1, by1)
+            self.canvas.coords(bloco["rect"], bx1, by1, bx2, by2)
+            if bloco.get("icon"):
+                self.canvas.coords(bloco["icon"], bx1, by1)
+            if bloco.get("borda"):
+                self.canvas.coords(bloco["borda"],
+                                   bx1-2, by1-2, bx2+2, by2+2)
+            bloco["x"], bloco["y"] = bx1, by1
 
-        # 1) borda criada pelo BlocoManager (seleção única)
-        if self.borda_selecionada:
-            self.canvas.coords(self.borda_selecionada,
-                               bx1 - 2, by1 - 2, bx2 + 2, by2 + 2)
-
-        # 2) borda criada pelo SetaManager (seleção única ou múltipla)
-        if bloco.get("borda"):
-            self.canvas.coords(bloco["borda"],
-                               bx1 - 2, by1 - 2, bx2 + 2, by2 + 2)
-
-        # atualiza posição interna
-        bloco["x"], bloco["y"] = bx1, by1
-
-        # atualiza setas conectadas
+        # atualiza setas 1× (não precisa por bloco)
         self.app.setas.atualizar_setas()
     
     def atualizar_selecao_area(self, event):
@@ -218,3 +256,139 @@ class BlocoManager:
         self.canvas.delete(self.sel_rect_id)
         self.sel_rect_id = None
         self.selecao_iniciada = False
+        return "break"
+
+    #  (A) utilitário: snapshot p/ ‘undo’
+    def _snapshot(self):
+        estado_blocos = [
+            (b["text"], b["x"], b["y"]) for b in self.blocks
+        ]
+        estado_setas = [
+            (self.blocks.index(o), self.blocks.index(d))  # índices
+            for _, o, d in self.app.setas.setas
+        ]
+        return (estado_blocos, estado_setas)
+
+    def _restaurar_snapshot(self, snap):
+        self._is_restoring = True          # ↓↓↓     evita pushes internos
+
+        blocos_info, setas_info = snap
+        # --- limpa canvas atual ---
+        for bloco in self.blocks:
+            self.canvas.delete(bloco["rect"])
+            if bloco.get("icon"):   self.canvas.delete(bloco["icon"])
+            if bloco.get("borda"):  self.canvas.delete(bloco["borda"])
+        self.blocks.clear(); self.ocupados.clear()
+        for seta_id, *_ in self.app.setas.setas:
+            self.canvas.delete(seta_id)
+        self.app.setas.setas.clear()
+
+        # --- recria blocos ---
+        for text, x, y in blocos_info:
+            novo = self.adicionar_bloco(text, "white")   # não empilha snapshot
+            self.canvas.coords(novo["rect"], x, y,
+                               x+novo["width"], y+novo["height"])
+            if novo.get("icon"):
+                self.canvas.coords(novo["icon"], x, y)
+            novo["x"], novo["y"] = x, y
+
+        # --- recria setas ---
+        for idx_o, idx_d in setas_info:
+            self.app.setas.desenhar_linha(self.blocks[idx_o],
+                                          self.blocks[idx_d])
+
+        self._is_restoring = False          # ↑↑↑     restaura comportamento normal
+
+
+    
+    # -----------------------------------------------------------
+    #  (B) atalhos públicos chamados por eventos.py
+    def selecionar_todos(self, event=None):
+        self.app.setas._limpar_selecao()
+        for bloco in self.blocks:
+            bx1, by1, bx2, by2 = self.canvas.coords(bloco["rect"])
+            borda = self.canvas.create_rectangle(
+                bx1-2, by1-2, bx2+2, by2+2,
+                outline="blue", width=2, dash=(4, 2)
+            )
+            self.canvas.tag_lower(borda, bloco["rect"])
+            bloco["borda"] = borda
+            self.app.itens_selecionados.append(("bloco", bloco))
+
+    def deletar_selecionados(self, event=None):
+        if not self.app.itens_selecionados:
+            return
+        self._undo_stack.append(self._snapshot());  self._redo_stack.clear()
+        for tipo, item in list(self.app.itens_selecionados):
+            if tipo == "bloco":
+                self.app.setas.remover_setas_de_bloco(item)
+                self.canvas.delete(item["rect"])
+                if item.get("icon"):
+                    self.canvas.delete(item["icon"])
+                if item.get("borda"):
+                    self.canvas.delete(item["borda"])
+                self.blocks.remove(item)
+            elif tipo == "seta":
+                self.app.setas.deletar_seta_por_id(item)
+        self.app.itens_selecionados.clear()
+
+    def recortar_selecionados(self, event=None):
+        # por ora: apenas deleta; clipboard poderia ser salvo aqui
+        self.deletar_selecionados()
+
+    def desfazer(self, event=None):
+        if not self._undo_stack:
+            return
+        self._redo_stack.append(self._snapshot())
+        snap = self._undo_stack.pop()
+        self._restaurar_snapshot(snap)
+
+    def refazer(self, event=None):
+        if not self._redo_stack:
+            return
+        self._undo_stack.append(self._snapshot())
+        snap = self._redo_stack.pop()
+        self._restaurar_snapshot(snap)
+        # === clipboard simples (texto + deslocamento) =========================
+    _clipboard = None   # [(text, dx, dy), ...]
+
+    def copiar_selecionados(self, event=None):
+        blocos = [b for t, b in self.app.itens_selecionados if t == "bloco"]
+        if not blocos:
+            return
+        # origem relativa (canto superior-esquerdo)
+        min_x = min(b["x"] for b in blocos)
+        min_y = min(b["y"] for b in blocos)
+        BlocoManager._clipboard = [
+            (b["text"], b["x"] - min_x, b["y"] - min_y) for b in blocos
+        ]
+
+    def colar_selecionados(self, event=None):
+        if not BlocoManager._clipboard:
+            return
+        self._undo_stack.append(self._snapshot()); self._redo_stack.clear()
+
+        # ponto base levemente deslocado para não sobrepor original
+        base_x, base_y = self.encontrar_proxima_posicao()
+        base_x += 20
+        base_y += 20
+
+        self.app.setas._limpar_selecao()
+        for text, dx, dy in BlocoManager._clipboard:
+            novo = self.adicionar_bloco(text, "white")
+            # reposiciona
+            x = base_x + dx
+            y = base_y + dy
+            self.canvas.coords(novo["rect"], x, y,
+                               x+novo["width"], y+novo["height"])
+            if novo.get("icon"):
+                self.canvas.coords(novo["icon"], x, y)
+            novo["x"], novo["y"] = x, y
+            # borda de seleção
+            borda = self.canvas.create_rectangle(
+                x-2, y-2, x+novo["width"]+2, y+novo["height"]+2,
+                outline="blue", width=2, dash=(4, 2)
+            )
+            self.canvas.tag_lower(borda, novo["rect"])
+            novo["borda"] = borda
+            self.app.itens_selecionados.append(("bloco", novo))
