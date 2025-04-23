@@ -320,8 +320,11 @@ class BlocoManager:
         dy = new_y - self.arrastando["y"]
 
         #alvos = self._drag_group if self._drag_group else [self.arrastando]
-        # se já houver grupo definido, mantém; senão, monta pelo itens_selecionados
+         # ——— se já houver um grupo, garante que o arrastando faça parte dele ———
         if self._drag_group:
+            # assegura que o bloco clicado (arrastando) esteja sempre no grupo
+            if self.arrastando not in self._drag_group:
+                self._drag_group.insert(0, self.arrastando)
             alvos = self._drag_group
         else:
              # checa se há seleção múltipla ativa e arrastando faz parte dela
