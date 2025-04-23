@@ -318,6 +318,9 @@ class SetaManager:
                 if item.get("icon"):
                     self.canvas.delete(item["icon"])
 
+                for h in item.get("handles", []):
+                    self.canvas.delete(h)
+                    
                 # Remove a borda se existir (seleção única)
                 if self.blocos.borda_selecionada:
                     self.canvas.delete(self.blocos.borda_selecionada)

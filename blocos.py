@@ -331,12 +331,23 @@ class BlocoManager:
         self._is_restoring = True          # ↓↓↓     evita pushes internos
 
         blocos_info, setas_info = snap
+
         # --- limpa canvas atual ---
-        for bloco in self.blocks:
+        for bloco in list(self.blocks):    # cópia para não alterar enquanto itera
+            # bloco base
             self.canvas.delete(bloco["rect"])
-            if bloco.get("icon"):   self.canvas.delete(bloco["icon"])
-            if bloco.get("borda"):  self.canvas.delete(bloco["borda"])
-        self.blocks.clear(); self.ocupados.clear()
+            # ícone, borda e TODOS os handles (+)
+            if bloco.get("icon"):
+                self.canvas.delete(bloco["icon"])
+            if bloco.get("borda"):
+                self.canvas.delete(bloco["borda"])
+            for h in bloco.get("handles", []):
+                self.canvas.delete(h)
+
+        self.blocks.clear()
+        self.ocupados.clear()
+
+        # setas existentes
         for seta_id, *_ in self.app.setas.setas:
             self.canvas.delete(seta_id)
         self.app.setas.setas.clear()
@@ -385,6 +396,8 @@ class BlocoManager:
                     self.canvas.delete(item["icon"])
                 if item.get("borda"):
                     self.canvas.delete(item["borda"])
+                for h in item.get("handles", []):
+                    self.canvas.delete(h)
                 self.blocks.remove(item)
             elif tipo == "seta":
                 self.app.setas.deletar_seta_por_id(item)
