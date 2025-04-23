@@ -111,10 +111,10 @@ class BlocoManager:
         cx, cy = x + self.block_width // 2, y + self.block_height // 2
         # coordenadas dos 4 lados
         pontos = [
-            (cx, y - half),                      # topo
-            (cx, y + self.block_height - half), # base
-            (x - half, cy),                      # esquerda
-            (x + self.block_width - half, cy)    # direita
+            (cx, y - half),                       # topo
+            (cx, y + self.block_height + half),   # base  → fora
+            (x - half, cy),                       # esquerda
+            (x + self.block_width + half, cy)     # direita → fora
         ]
 
         group_tag = f"bloco{len(self.blocks)}"
@@ -508,9 +508,9 @@ class BlocoManager:
         cy  = (y1 + y2) / 2
         novos = [
             (cx,        y1 - half),   # topo
-            (cx,        y2 - half),   # base
+            (cx,        y2 + half),   # base  → fora
             (x1 - half, cy),          # esquerda
-            (x2 - half, cy)           # direita
+            (x2 + half, cy)           # direita → fora
         ]
         for h, (hx, hy) in zip(bloco["handles"], novos):
             self.canvas.coords(h, hx, hy)
