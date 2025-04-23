@@ -204,33 +204,84 @@ class BlocoManager:
                     self.canvas.tag_lower(bloco["borda"], bloco["rect"])
                 self.borda_selecionada = bloco["borda"]
 
-                # monta grupo a arrastar
-                if ("bloco", bloco) not in self.app.itens_selecionados:
-                    if not ctrl:          # clique normal → seleção única
+                # —— monta seleção e drag_group —— 
+                sel = [b for t,b in self.app.itens_selecionados if t=="bloco"]
+                if ctrl:
+                    # toggle de seleção
+                    if ("bloco", bloco) in self.app.itens_selecionados:
+                        # desmarcar
+                        self.app.itens_selecionados = [
+                            p for p in self.app.itens_selecionados 
+                            if not (p[0]=="bloco" and p[1] is bloco)
+                        ]
+                        if bloco.get("borda"):
+                            self.canvas.delete(bloco["borda"])
+                            bloco["borda"] = None
+                    else:
+                        # marcar
+                        self.app.itens_selecionados.append(("bloco", bloco))
+                        if not bloco.get("borda"):
+                            bx1,by1,bx2,by2 = self.canvas.coords(bloco["rect"])
+                            bloco["borda"] = self.canvas.create_rectangle(
+                                bx1-2,by1-2,bx2+2,by2+2,
+                                outline="blue", width=2, dash=(4,2)
+                            )
+                            self.canvas.tag_lower(bloco["borda"], bloco["rect"])
+                    # atualiza grupo completo
+                    sel = [b for t,b in self.app.itens_selecionados if t=="bloco"]
+                    self._drag_group = sel
+                else:
+                    # clique normal
+                    if bloco in sel and len(sel) > 1:
+                        # já havia seleção múltipla: mantém o grupo inteiro
+                        self._drag_group = sel
+                    else:
+                        # nova seleção única
                         self.app.setas.limpar_selecao()
                         self.app.itens_selecionados = [("bloco", bloco)]
-                    else:                 # Ctrl-click adiciona
-                        self.app.itens_selecionados.append(("bloco", bloco))
-
-                self._drag_group = [b for t, b in self.app.itens_selecionados if t == "bloco"]
-                 # garante que o bloco sob o mouse (e o grupo selecionado) fique no topo
+                        if not bloco.get("borda"):
+                            bx1,by1,bx2,by2 = self.canvas.coords(bloco["rect"])
+                            bloco["borda"] = self.canvas.create_rectangle(
+                                bx1-2,by1-2,bx2+2,by2+2,
+                                outline="blue", width=2, dash=(4,2)
+                            )
+                            self.canvas.tag_lower(bloco["borda"], bloco["rect"])
+                        self._drag_group = [bloco]
+                # traz todo o drag_group pra frente e remove duplicatas
+                for b in self._drag_group:
+                    self._bring_to_front(b)
+                self.app.itens_selecionados = self._unique(self.app.itens_selecionados)
+                return "break"
+            
+                # mantém a ordem original, mas sem duplicados
+                self._drag_group = self._unique(
+                    b for t, b in self.app.itens_selecionados if t == "bloco"
+                )
+                # garante que o bloco sob o mouse (e o grupo selecionado) fique no topo
                 self._bring_to_front(bloco)
+
+                # remove duplicatas mantendo a ordem
+                self.app.itens_selecionados = self._unique(self.app.itens_selecionados)
 
                 return "break"   # impede que o clique caia no SetaManager
             
             # 2) Clique em área vazia → inicia retângulo de seleção
-        if self.borda_selecionada:
-            self.canvas.delete(self.borda_selecionada)
-            self.borda_selecionada = None
+        for tipo, bloco in list(self.app.itens_selecionados):
+            if tipo == "bloco" and bloco.get("borda"):
+                self.canvas.delete(bloco["borda"])
+                bloco["borda"] = None
+        # limpa lista de itens selecionados e destaque de setas
+        self.app.itens_selecionados.clear()
+        self.app.setas.limpar_selecao()
 
+        # agora inicia retângulo de seleção por área
         self.selecao_iniciada = True
         self.sel_start_x, self.sel_start_y = x, y
         self.sel_rect_id = self.canvas.create_rectangle(
             x, y, x, y, outline="blue", dash=(2, 2)
         )
-        self.app.setas.limpar_selecao()
         return "break"
-            
+
 
         # clique fora de qualquer bloco → inicia seleção por área
         self.selecao_iniciada = True
@@ -268,7 +319,19 @@ class BlocoManager:
         dx = new_x - self.arrastando["x"]
         dy = new_y - self.arrastando["y"]
 
-        alvos = self._drag_group if self._drag_group else [self.arrastando]
+        #alvos = self._drag_group if self._drag_group else [self.arrastando]
+        # se já houver grupo definido, mantém; senão, monta pelo itens_selecionados
+        if self._drag_group:
+            alvos = self._drag_group
+        else:
+             # checa se há seleção múltipla ativa e arrastando faz parte dela
+            sel_blocks = [b for t,b in self.app.itens_selecionados if t == "bloco"]
+            if len(sel_blocks) > 1 and self.arrastando in sel_blocks:
+                 alvos = sel_blocks
+                 self._drag_group = sel_blocks
+            else:
+                alvos = [self.arrastando]
+        
         for bloco in alvos:
             bx1 = bloco["x"] + dx
             by1 = bloco["y"] + dy
@@ -326,6 +389,9 @@ class BlocoManager:
         self.canvas.delete(self.sel_rect_id)
         self.sel_rect_id = None
         self.selecao_iniciada = False
+
+        # remove duplicatas mantendo a ordem
+        self.app.itens_selecionados = self._unique(self.app.itens_selecionados)
         return "break"
 
     #  (A) utilitário: snapshot p/ ‘undo’
@@ -385,7 +451,10 @@ class BlocoManager:
     # -----------------------------------------------------------
     #  (B) atalhos públicos chamados por eventos.py
     def selecionar_todos(self, event=None):
+        # limpa destaques antigos de setas e blocos
         self.app.setas._limpar_selecao()
+        # zera a lista de itens selecionados antes de reapopular
+        self.app.itens_selecionados.clear()
         for bloco in self.blocks:
             bx1, by1, bx2, by2 = self.canvas.coords(bloco["rect"])
             borda = self.canvas.create_rectangle(
@@ -533,3 +602,14 @@ class BlocoManager:
         # borda (se existir) deve ficar acima de tudo
         if bloco.get("borda"):
             self.canvas.tag_raise(bloco["borda"])
+    
+    def _unique(self, seq):
+        """Devolve lista sem repetição, mantendo ordem. Para tuplos (tipo, obj), deduplica pelo id(obj);  para demais itens, pelo id(item)."""
+        seen = set()
+        out  = []
+        for item in seq:
+            obj_id = id(item[1]) if isinstance(item, tuple) else id(item)
+            if obj_id not in seen:
+                seen.add(obj_id)
+                out.append(item)
+        return out
