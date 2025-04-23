@@ -17,6 +17,7 @@ import pytesseract
 
 
 class BlocoManager:
+    _next_id = 1      # contador de IDs
     def __init__(self, canvas, app):
         self.canvas = canvas
         self.app = app
@@ -80,7 +81,9 @@ class BlocoManager:
             y += self.block_height + self.espaco_vertical
 
     def adicionar_bloco(self, nome, cor):
-        # só registra snapshot se NÃO estiver restaurando
+        # 1) gera um ID único
+        bloco_id = BlocoManager._next_id
+        BlocoManager._next_id += 1
         if not self._is_restoring:
             self._undo_stack.append(self._snapshot())
             self._redo_stack.clear()
@@ -88,9 +91,10 @@ class BlocoManager:
         x, y = self.encontrar_proxima_posicao()
         self.ocupados.add((x, y))
 
-        # retângulo invisível para clique
+        # retângulo base
         rect = self.canvas.create_rectangle(
-            x, y, x + self.block_width, y + self.block_height,
+            x, y,
+            x + self.block_width, y + self.block_height,
             outline="", fill=""
         )
 
@@ -103,88 +107,132 @@ class BlocoManager:
                 Image.Resampling.LANCZOS
             )
             tk_img = ImageTk.PhotoImage(img)
-            self.imagens[nome + str(len(self.blocks))] = tk_img
+            self.imagens[f"{nome}{len(self.blocks)}"] = tk_img
             icon = self.canvas.create_image(x, y, anchor="nw", image=tk_img)
         else:
             icon = None
 
         bloco = {
+            "id": bloco_id,
             "rect": rect,
             "icon": icon,
-            "x": x,
-            "y": y,
+            "x": x, "y": y,
             "width": self.block_width,
             "height": self.block_height,
             "text": nome
         }
-        
-        if icon is not None:                                   #  ← nova
-            self.canvas.tag_bind(icon, "<Enter>",              #  ← nova
-                                 lambda e, b=bloco: self._show_handles(b))  #  ← nova
-            self.canvas.tag_bind(icon, "<Leave>",
-                                 lambda e, b=bloco: self._hide_handles(b))
-        # --- pequenos "+" que só aparecem no hover --------------------------
-        size = 10      # Largura/altura do quadradinho
-        half = size // 2
-        cx, cy = x + self.block_width // 2, y + self.block_height // 2
-        # coordenadas dos 4 lados
-        pontos = [
-            (cx, y - half),                       # topo
-            (cx, y + self.block_height + half),   # base  → fora
-            (x - half, cy),                       # esquerda
-            (x + self.block_width + half, cy)     # direita → fora
-        ]
 
+        #  ── group_tag para mover tudo junto ──
         group_tag = f"bloco{len(self.blocks)}"
-        self.canvas.addtag_withtag(group_tag, rect)          # retângulo base
-        if icon is not None:
-            self.canvas.addtag_withtag(group_tag, icon)      # imagem
-        # “handles” (⊕) são criados logo abaixo; vamos guardar suas IDs
-        handles = []
-        for hx, hy in pontos:
-            h = self.canvas.create_text(hx, hy, text="⊕", fill="#0a84ff",
-                                         state="hidden", font=("Arial", 10, "bold"))
-            handles.append(h)
-            self.canvas.addtag_withtag("handle", h)
-            self.canvas.tag_bind(h, "<ButtonPress-1>",
-                                 lambda e, b=bloco: self._handle_press(b, e))
-            self.canvas.addtag_withtag(group_tag, h)
+        self.canvas.addtag_withtag(group_tag, rect)
+        if icon:
+            self.canvas.addtag_withtag(group_tag, icon)
+        bloco["group_tag"] = group_tag
 
-        bloco["handles"] = handles
-
-        self.canvas.tag_bind(group_tag, "<Enter>",
-                         lambda e, b=bloco: self._show_handles(b))
-        self.canvas.tag_bind(group_tag, "<Leave>",
-                         lambda e, b=bloco: self._hide_handles(b))
-        
         lt = nome.strip().lower()
+        if lt in ("se imagem", "ocr", "ocr duplo"):
+            # ── IF-block: um oval verde no topo (true) e um vermelho abaixo (false)
+            cx = x + self.block_width / 2
+            r = 5
+
+            h_true = self.canvas.create_oval(
+                cx - r, y - 2*r,
+                cx + r, y,
+                fill="green", outline=""
+            )
+            h_false = self.canvas.create_oval(
+                cx - r, y + self.block_height,
+                cx + r, y + self.block_height + 2*r,
+                fill="red", outline=""
+            )
+            bloco["true_handle"] = h_true
+            bloco["false_handle"] = h_false
+
+            # agrupa-os
+            self.canvas.addtag_withtag(group_tag, h_true)
+            self.canvas.addtag_withtag(group_tag, h_false)
+
+            # bind para iniciar conexão com branch
+            self.canvas.tag_bind(
+                h_true, "<ButtonPress-1>",
+                lambda e, b=bloco: self._handle_press_if(b, e, branch="true")
+            )
+            self.canvas.tag_bind(
+                h_false, "<ButtonPress-1>",
+                lambda e, b=bloco: self._handle_press_if(b, e, branch="false")
+            )
+        else:
+            # ── handles padrão (“⊕” nos 4 lados) ──
+            size = 10; half = size // 2
+            cx = x + self.block_width//2
+            cy = y + self.block_height//2
+            pontos = [
+                (cx, y-half),
+                (cx, y + self.block_height + half),
+                (x-half, cy),
+                (x + self.block_width + half, cy)
+            ]
+            handles = []
+            for hx, hy in pontos:
+                h = self.canvas.create_text(
+                    hx, hy, text="⊕",
+                    fill="#0a84ff",
+                    state="hidden",
+                    font=("Arial", 10, "bold")
+                )
+                handles.append(h)
+                self.canvas.addtag_withtag("handle", h)
+                self.canvas.addtag_withtag(group_tag, h)
+                self.canvas.tag_bind(
+                    h, "<ButtonPress-1>",
+                    lambda e, b=bloco: self._handle_press(b, e)
+                )
+            bloco["handles"] = handles
+            self.canvas.tag_bind(
+                group_tag, "<Enter>",
+                lambda e, b=bloco: self._show_handles(b)
+            )
+            self.canvas.tag_bind(
+                group_tag, "<Leave>",
+                lambda e, b=bloco: self._hide_handles(b)
+            )
+
+        # ── bindings de duplo clique (mesmos de antes) ──
         if lt == "clique":
-            self.canvas.tag_bind(group_tag, "<Double-Button-1>",
-                                 lambda e, b=bloco: self._on_double_click_click(b))
+            self.canvas.tag_bind(rect, "<Double-Button-1>",
+                                 lambda e,b=bloco: self._on_double_click_click(b))
         elif lt == "delay":
-            self.canvas.tag_bind(group_tag, "<Double-Button-1>",
-                                 lambda e, b=bloco: self._on_double_click_delay(b))
+            self.canvas.tag_bind(rect, "<Double-Button-1>",
+                                 lambda e,b=bloco: self._on_double_click_delay(b))
         elif lt == "goto":
-            self.canvas.tag_bind(group_tag, "<Double-Button-1>",
-                                 lambda e, b=bloco: self._on_double_click_goto(b))
+            self.canvas.tag_bind(rect, "<Double-Button-1>",
+                                 lambda e,b=bloco: self._on_double_click_goto(b))
         elif lt == "se imagem":
-            self.canvas.tag_bind(group_tag, "<Double-Button-1>",
-                                 lambda e, b=bloco: self._on_double_click_imagem(b))
+            self.canvas.tag_bind(rect, "<Double-Button-1>",
+                                 lambda e,b=bloco: self._on_double_click_imagem(b))
         elif lt == "label":
-            self.canvas.tag_bind(group_tag, "<Double-Button-1>",
-                                 lambda e, b=bloco: self._on_double_click_label(b))
+            self.canvas.tag_bind(rect, "<Double-Button-1>",
+                                 lambda e,b=bloco: self._on_double_click_label(b))
         elif lt == "loop":
-            self.canvas.tag_bind(group_tag, "<Double-Button-1>",
-                                 lambda e, b=bloco: self._on_double_click_loop(b))
+            self.canvas.tag_bind(rect, "<Double-Button-1>",
+                                 lambda e,b=bloco: self._on_double_click_loop(b))
         elif lt == "ocr":
-            self.canvas.tag_bind(group_tag, "<Double-Button-1>",
-                                 lambda e, b=bloco: self._on_double_click_ocr(b))
+            self.canvas.tag_bind(rect, "<Double-Button-1>",
+                                 lambda e,b=bloco: self._on_double_click_ocr(b))
         elif lt == "ocr duplo":
-            self.canvas.tag_bind(group_tag, "<Double-Button-1>",
-                                 lambda e, b=bloco: self._on_double_click_ocr_duplo(b))
+            self.canvas.tag_bind(rect, "<Double-Button-1>",
+                                 lambda e,b=bloco: self._on_double_click_ocr_duplo(b))
 
         self.blocks.append(bloco)
         return bloco
+
+    def _handle_press_if(self, bloco, event, branch):
+        """
+        Inicia conexão a partir de um IF-block, marcando se é true ou false.
+        """
+        self.app.setas.iniciar_conexao(bloco, event, branch=branch)
+        return "break"
+
 
     def _handle_press(self, bloco, event):
         """Clique no ⊕ inicia a conexão e impede arrasto do bloco."""
@@ -463,46 +511,66 @@ class BlocoManager:
 
 
     def _restaurar_snapshot(self, snap):
-        self._is_restoring = True          # ↓↓↓     evita pushes internos
+        """
+        Restaura o estado dos blocos e setas a partir de um snapshot.
+        Garante que todos os handles (⊕ e IF-block ovals) sejam removidos
+        e recriados na posição correta.
+        """
+        self._is_restoring = True
 
         blocos_info, setas_info = snap
 
-        # --- limpa canvas atual ---
-        for bloco in list(self.blocks):    # cópia para não alterar enquanto itera
-            # bloco base
+        # 1) Limpa canvas inteiro de blocos antigos
+        for bloco in list(self.blocks):
+            # retângulo base
             self.canvas.delete(bloco["rect"])
-            # ícone, borda e TODOS os handles (+)
+            # ícone (se houver)
             if bloco.get("icon"):
                 self.canvas.delete(bloco["icon"])
+            # borda de seleção (se houver)
             if bloco.get("borda"):
                 self.canvas.delete(bloco["borda"])
+            # handles padrão (⊕)
             for h in bloco.get("handles", []):
                 self.canvas.delete(h)
+            # handles IF-blocks (ovais verde/vermelho)
+            if bloco.get("true_handle"):
+                self.canvas.delete(bloco["true_handle"])
+            if bloco.get("false_handle"):
+                self.canvas.delete(bloco["false_handle"])
+            # rótulo de ação (se houver)
             if bloco.get("label_id"):
                 self.canvas.delete(bloco["label_id"])
-        self.canvas.delete(bloco["rect"])
 
+        # esvazia lista de blocos e posições ocupadas
         self.blocks.clear()
         self.ocupados.clear()
 
-        # setas existentes
+        # 2) Limpa setas existentes
         for seta_id, *_ in self.app.setas.setas:
             self.canvas.delete(seta_id)
         self.app.setas.setas.clear()
 
-        # --- recria blocos ---
+        # 3) Recria cada bloco
         for text, x, y, acao in blocos_info:
             novo = self.adicionar_bloco(text, "white")
+
             # reposiciona retângulo e ícone
-            self.canvas.coords(novo["rect"], x, y, x+novo["width"], y+novo["height"])
+            self.canvas.coords(novo["rect"],
+                               x, y,
+                               x + novo["width"], y + novo["height"])
             if novo.get("icon"):
                 self.canvas.coords(novo["icon"], x, y)
             novo["x"], novo["y"] = x, y
 
-            # se havia ação de clique, restaura também o label
+            # reposiciona handles (ovais e/ou ⊕) na nova posição
+            self._recolocar_handles(novo)
+
+            # restaura ação e label, se existia
             if acao:
                 novo["acao"] = acao
-                tipo = acao.get("type")
+                # aqui você repete seu código de criação de label:
+                tipo = acao.get("type", "").lower()
                 if tipo == "click":
                     txt = f"Click @({acao['x']},{acao['y']})"
                 elif tipo == "delay":
@@ -513,33 +581,34 @@ class BlocoManager:
                     txt = f"Img:{acao['imagem']} @({acao['x']},{acao['y']},{acao['w']},{acao['h']})"
                 elif tipo == "label":
                     txt = f"Label: {acao['name']}"
-                elif acao["type"] == "loopstart":
+                elif tipo == "loopstart":
                     if acao.get("mode") == "quantidade":
                         txt = f"INÍCIO LOOP {acao['count']}x"
                     else:
                         txt = "INÍCIO LOOP INFINITO"
-                elif acao["type"] == "ocr":
-                        txt = f"OCR: '{acao['text']}'"
-                elif acao["type"] == "ocr_duplo":
-                        txt = f"OCR: '{acao['text1']}' e '{acao['text2']}'"
+                elif tipo == "ocr":
+                    txt = f"OCR: '{acao['text']}'"
+                elif tipo == "ocr_duplo":
+                    cond = acao.get("condicao", "and").upper()
+                    txt = f"OCR Duplo: '{acao['text1']}' {cond} '{acao['text2']}'"
                 else:
-                    txt = f"{tipo.upper()}"
-                label_id = self.canvas.create_text(
+                    txt = tipo.upper()
+                novo["label_id"] = self.canvas.create_text(
                     x + novo["width"]/2,
                     y + novo["height"] + 8,
                     text=txt,
                     font=("Arial", 9),
                     fill="black"
                 )
-                novo["label_id"] = label_id
 
-
-        # --- recria setas ---
+        # 4) Recria todas as setas entre blocos
         for idx_o, idx_d in setas_info:
-            self.app.setas.desenhar_linha(self.blocks[idx_o],
-                                          self.blocks[idx_d])
+            origem = self.blocks[idx_o]
+            destino = self.blocks[idx_d]
+            self.app.setas.desenhar_linha(origem, destino)
 
-        self._is_restoring = False          # ↑↑↑     restaura comportamento normal
+        self._is_restoring = False
+
 
 
     
@@ -563,25 +632,46 @@ class BlocoManager:
     def deletar_selecionados(self, event=None):
         if not self.app.itens_selecionados:
             return
-        self._undo_stack.append(self._snapshot());  self._redo_stack.clear()
+        # empilha snapshot para undo
+        self._undo_stack.append(self._snapshot())
+        self._redo_stack.clear()
+
         for tipo, item in list(self.app.itens_selecionados):
             if tipo == "bloco":
                 # remove setas conectadas
                 self.app.setas.remover_setas_de_bloco(item)
-                # remove o retângulo, ícone, borda, handles e o label se existir
+
+                # retira rótulo de ação, se existir
                 if item.get("label_id"):
                     self.canvas.delete(item["label_id"])
+
+                # retângulo, ícone e borda
                 self.canvas.delete(item["rect"])
                 if item.get("icon"):
                     self.canvas.delete(item["icon"])
                 if item.get("borda"):
                     self.canvas.delete(item["borda"])
+
+                # handles padrão (⊕)
                 for h in item.get("handles", []):
                     self.canvas.delete(h)
+
+                # handles IF-blocks (ovais verde/vermelho)
+                if item.get("true_handle"):
+                    self.canvas.delete(item["true_handle"])
+                if item.get("false_handle"):
+                    self.canvas.delete(item["false_handle"])
+
+                # remove das estruturas internas
                 self.blocks.remove(item)
+                self.ocupados.discard((item["x"], item["y"]))
+
             elif tipo == "seta":
                 self.app.setas.deletar_seta_por_id(item)
+
+        # limpa seleção
         self.app.itens_selecionados.clear()
+
 
     def recortar_selecionados(self, event=None):
         """Ctrl+X – coloca os blocos selecionados no clipboard e os remove."""
@@ -597,8 +687,9 @@ class BlocoManager:
             (b["text"], b["x"] - min_x, b["y"] - min_y) for b in blocos
         ]
 
-        # 3 – remove realmente os itens  (isso já grava snapshot para undo)
+        # 3 – remove realmente os itens (já grava snapshot via deletar_selecionados)
         self.deletar_selecionados()
+
 
 
     def desfazer(self, event=None):
@@ -631,32 +722,47 @@ class BlocoManager:
     def colar_selecionados(self, event=None):
         if not BlocoManager._clipboard:
             return
-        self._undo_stack.append(self._snapshot()); self._redo_stack.clear()
-
+        # salva snapshot para undo
+        self._undo_stack.append(self._snapshot())
+        self._redo_stack.clear()
+    
         # ponto base levemente deslocado para não sobrepor original
         base_x, base_y = self.encontrar_proxima_posicao()
         base_x += 20
         base_y += 20
-
+    
+        # limpa seleção anterior
         self.app.setas._limpar_selecao()
+    
         for text, dx, dy in BlocoManager._clipboard:
+            # cria o bloco
             novo = self.adicionar_bloco(text, "white")
-            # reposiciona
+    
+            # calcula e aplica nova posição
             x = base_x + dx
             y = base_y + dy
-            self.canvas.coords(novo["rect"], x, y,
-                               x+novo["width"], y+novo["height"])
+            self.canvas.coords(novo["rect"],
+                               x, y,
+                               x + novo["width"], y + novo["height"])
             if novo.get("icon"):
                 self.canvas.coords(novo["icon"], x, y)
             novo["x"], novo["y"] = x, y
-            # borda de seleção
+    
+            # reposiciona todos os handles (⊕ e IF-block ovals)
+            self._recolocar_handles(novo)
+    
+            # desenha borda de seleção ao redor do bloco
             borda = self.canvas.create_rectangle(
-                x-2, y-2, x+novo["width"]+2, y+novo["height"]+2,
+                x - 2, y - 2,
+                x + novo["width"] + 2, y + novo["height"] + 2,
                 outline="blue", width=2, dash=(4, 2)
             )
             self.canvas.tag_lower(borda, novo["rect"])
             novo["borda"] = borda
+    
+            # adiciona à lista de selecionados
             self.app.itens_selecionados.append(("bloco", novo))
+
 
     def _show_handles(self, bloco):
         self._recolocar_handles(bloco)
@@ -674,22 +780,49 @@ class BlocoManager:
                 pass
 
     def _recolocar_handles(self, bloco):
-        """Reposiciona os ⊕ de acordo com a posição atual do bloco."""
-        if not bloco.get("handles"):
-            return
-        size  = 10
-        half  = size // 2
-        x1, y1, x2, y2 = self.canvas.coords(bloco["rect"])
-        cx  = (x1 + x2) / 2
-        cy  = (y1 + y2) / 2
-        novos = [
-            (cx,        y1 - half),   # topo
-            (cx,        y2 + half),   # base  → fora
-            (x1 - half, cy),          # esquerda
-            (x2 + half, cy)           # direita → fora
-        ]
-        for h, (hx, hy) in zip(bloco["handles"], novos):
-            self.canvas.coords(h, hx, hy)
+        """
+        Reposiciona os handles de um bloco:
+        - Se for IF-block, reposiciona true_handle (verde) e false_handle (vermelho).
+        - Se for bloco normal, reposiciona os 4 handles “⊕”.
+        """
+        # 1) IF-block: reposiciona os óvais coloridos
+        if bloco.get("true_handle"):
+            x, y = bloco["x"], bloco["y"]
+            r = 5
+            cx = x + bloco["width"] / 2
+            # true_handle no topo
+            self.canvas.coords(
+                bloco["true_handle"],
+                cx - r, y - 2*r,
+                cx + r, y
+            )
+        if bloco.get("false_handle"):
+            x, y = bloco["x"], bloco["y"]
+            r = 5
+            cx = x + bloco["width"] / 2
+            # false_handle embaixo
+            self.canvas.coords(
+                bloco["false_handle"],
+                cx - r, y + bloco["height"],
+                cx + r, y + bloco["height"] + 2*r
+            )
+
+        # 2) Blocos normais: reposiciona os 4 ⊕, se existirem
+        if bloco.get("handles"):
+            size = 10
+            half = size // 2
+            x1, y1, x2, y2 = self.canvas.coords(bloco["rect"])
+            cx = (x1 + x2) / 2
+            cy = (y1 + y2) / 2
+            novos = [
+                (cx,        y1 - half),  # topo
+                (cx,        y2 + half),  # base
+                (x1 - half, cy),         # esquerda
+                (x2 + half, cy)          # direita
+            ]
+            for h, (hx, hy) in zip(bloco["handles"], novos):
+                self.canvas.coords(h, hx, hy)
+
 
     def _bring_to_front(self, bloco):
         """Garante que o bloco e seus elementos fiquem acima dos demais."""

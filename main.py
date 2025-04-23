@@ -6,7 +6,10 @@ from eventos import bind_eventos
 from util import clicou_em_linha
 from PIL import Image, ImageTk
 from core.update_list import update_list
+from core.storage import export_macro_to_tmp, salvar_macro_gui, obter_caminho_macro_atual
+from core.executar import executar_macro_flow
 import json, os
+import threading
 
 class FlowchartApp:
     def __init__(self, root):
@@ -118,75 +121,103 @@ class FlowchartApp:
             return
 
         if nome == "Salvar":
-            path = filedialog.asksaveasfilename(
-                defaultextension=".json",
-                filetypes=[("JSON","*.json")],
-                title="Salvar macro como…"
-            )
-            if not path: return
-            # monta lista de ações a partir dos blocos no canvas
-            dados = []
-            for bloco in self.blocos.blocks:
-                if "acao" in bloco:
-                    ac = bloco["acao"].copy()
-                    ac["pos_x"] = bloco["x"]
-                    ac["pos_y"] = bloco["y"]
-                    dados.append(ac)
-            with open(path, "w", encoding="utf-8") as f:
-                json.dump(dados, f, indent=2, ensure_ascii=False)
-            messagebox.showinfo("Salvo", f"Macro salva em:\n{path}")
+            # exporta para tmp e chama GUI de salvamento
+            export_macro_to_tmp(self.blocos.blocks, self.setas.setas)
+            salvar_macro_gui()
+            return
 
         elif nome == "Carregar":
-            path = filedialog.askopenfilename(
-                filetypes=[("JSON","*.json")],
-                title="Abrir macro"
-            )
+            path = filedialog.askopenfilename(filetypes=[("JSON","*.json")], title="Abrir macro")
             if not path:
                 return
-
             try:
-                # 1) carrega o JSON
                 with open(path, "r", encoding="utf-8") as f:
-                    acoes = json.load(f)  # espera uma lista de {"type":"click","x":..,"y":..}
-
-                # 2) limpa canvas e blocos antigos
+                    data = json.load(f)
+                # limpa canvas e gerenciadores
                 self.canvas.delete("all")
                 self.blocos = BlocoManager(self.canvas, self)
                 self.setas  = SetaManager(self.canvas, self.blocos)
                 bind_eventos(self.canvas, self.blocos, self.setas, self.root)
 
-                # 3) recria cada bloco e seu label
-                for ac in acoes:
-                    if ac.get("type") == "click":
-                        bloco = self.blocos.adicionar_bloco("Clique", "white")
-                        # reposiciona retângulo e ícone
-                        px, py = ac.get("pos_x", bloco["x"]), ac.get("pos_y", bloco["y"])
-                        bx2, by2 = px + bloco["width"], py + bloco["height"]
-                        self.canvas.coords(bloco["rect"], px, py, bx2, by2)
-                        if bloco.get("icon"):
-                            self.canvas.coords(bloco["icon"], px, py)
-                        bloco["x"], bloco["y"] = px, py
+                # recria blocos com IDs e actions
+                id_map = {}
+                for blk in data.get("blocks", []):
+                    btype = blk.get("type", "")
+                    bloco = self.blocos.adicionar_bloco(btype, "white")
+                    x, y = blk.get("x", bloco["x"]), blk.get("y", bloco["y"])
+                    bx2, by2 = x + bloco["width"], y + bloco["height"]
+                    self.canvas.coords(bloco["rect"], x, y, bx2, by2)
+                    if bloco.get("icon"):
+                        self.canvas.coords(bloco["icon"], x, y)
+                    bloco["x"], bloco["y"] = x, y
+                    bloco["id"] = blk.get("id")
+                    id_map[bloco["id"]] = bloco
 
-                        # guarda a ação e desenha o label
-                        bloco["acao"]    = ac
-                        txt = f"Click @({ac['x']},{ac['y']})"
+                    params = blk.get("params", {})
+                    if params:
+                        bloco["acao"] = params
+                        tipo = params.get("type", "").lower()
+                        if tipo == "click":
+                            txt = f"Click @({params.get('x')},{params.get('y')})"
+                        elif tipo == "delay":
+                            txt = f"Delay: {params.get('time')}ms"
+                        elif tipo == "goto":
+                            txt = f"GOTO → {params.get('label')}"
+                        elif tipo == "imagem":
+                            txt = f"Img:{params.get('imagem')} @({params.get('x')},{params.get('y')},{params.get('w')},{params.get('h')})"
+                        elif tipo == "label":
+                            txt = f"Label: {params.get('name')}"
+                        elif tipo == "loopstart":
+                            if params.get('mode') == 'quantidade':
+                                txt = f"INÍCIO LOOP {params.get('count')}x"
+                            else:
+                                txt = "INÍCIO LOOP INFINITO"
+                        elif tipo == "ocr":
+                            txt = f"OCR: '{params.get('text')}'"
+                        elif tipo == "ocr_duplo":
+                            cond = params.get('condicao', 'and').upper()
+                            txt = f"OCR Duplo: '{params.get('text1')}' {cond} '{params.get('text2')}'"
+                        else:
+                            txt = tipo.upper()
                         bloco["label_id"] = self.canvas.create_text(
-                            px + bloco["width"]/2,
-                            py + bloco["height"] + 8,
+                            x + bloco["width"]/2,
+                            y + bloco["height"] + 8,
                             text=txt, font=("Arial", 9), fill="black"
                         )
+                # recria conexões
+                for conn in data.get("connections", []):
+                    origem = id_map.get(conn.get("from"))
+                    destino = id_map.get(conn.get("to"))
+                    if origem and destino:
+                        self.setas.desenhar_linha(origem, destino)
+
                 messagebox.showinfo("Carregado", f"Macro carregada de:\n{path}")
                 return
-
             except Exception as e:
                 messagebox.showerror("Erro ao carregar", str(e))
+                return
 
         elif nome == "Remover":
             print("🗑 Remover item(s) selecionado(s)")
             # usa a mesma rotina já ligada à tecla Delete
             self.blocos.deletar_selecionados()
+
         elif nome == "Executar":
-            print("▶ Executar macro")
+            # só exporta para tmp (sem salvar em Macros/)
+            tmp_path = export_macro_to_tmp(self.blocos.blocks, self.setas.setas)
+        
+            # dispara execução direto do JSON temporário
+            import threading
+            threading.Thread(
+                target=lambda: executar_macro_flow(tmp_path),
+                daemon=True
+            ).start()
+            return
+
+
+        if nome == "Remover":
+            self.blocos.deletar_selecionados()
+            return
             # TODO: iniciar execução dos blocos
 
         # Gerenciadores de canvas

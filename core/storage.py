@@ -2,136 +2,132 @@ import os
 import json
 import shutil
 from datetime import datetime
-from tkinter import messagebox, simpledialog, filedialog
-import copy
+from tkinter import messagebox, simpledialog
 
+# Diretórios base
 TMP_DIR = "tmp"
 MACROS_DIR = "Macros"
 
-caminho_arquivo_tmp = None  # Caminho do JSON temporário da macro em edição
+# Caminho do JSON temporário da macro em edição
+caminho_arquivo_tmp = None
 
-def criar_macro_temporaria(actions):
+
+def export_macro_to_tmp(blocks, arrows, macro_name=None):
+    """
+    Serializa blocos e conexões (setas) no formato:
+    {
+      "macro_name": <nome>,
+      "blocks": [{"id":..., "type":..., "params":..., "x":..., "y":...}, ...],
+      "connections": [{"from":id_origem, "to":id_destino}, ...]
+    }
+    e salva em TMP_DIR / "macro_<timestamp>.json".
+    """
     global caminho_arquivo_tmp
-    if not os.path.exists(TMP_DIR):
-        os.makedirs(TMP_DIR)
-    limpar_tmp()
+    os.makedirs(TMP_DIR, exist_ok=True)
+    # nome do arquivo temporário
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    caminho_arquivo_tmp = os.path.join(TMP_DIR, f"macro_{timestamp}.json")
+    filename = f"macro_{timestamp}.json"
+    caminho_arquivo_tmp = os.path.join(TMP_DIR, filename)
+
+    data = {
+        "macro_name": macro_name,
+        "blocks": [],
+        "connections": []
+    }
+    # serializa blocos
+    for bloco in blocks:
+        data["blocks"].append({
+            "id": bloco["id"],
+            "type": bloco["text"],
+            "params": bloco.get("acao", {}),
+            "x": bloco["x"],
+            "y": bloco["y"]
+        })
+    # serializa conexões
+    for _, origem, destino in arrows:
+        data["connections"].append({
+            "from": origem["id"],
+            "to": destino["id"]
+        })
+    # grava JSON temporário
     with open(caminho_arquivo_tmp, "w", encoding="utf-8") as f:
-        json.dump(actions, f, indent=2)
+        json.dump(data, f, ensure_ascii=False, indent=2)
     return caminho_arquivo_tmp
 
-def salvar_macro_gui(actions):
-    print("[DEBUG] Salvando macro com ações:", len(actions))
-    print(json.dumps(actions, indent=2))
+
+def salvar_macro_gui():
+    """
+    Move o JSON e imagens de TMP_DIR para MACROS_DIR/<macro_name>/
+    Pergunta nome da macro se ainda não existir.
+    """
     global caminho_arquivo_tmp
-    if not caminho_arquivo_tmp:
-        messagebox.showerror("Erro", "Nenhuma macro em edição.")
+    if not caminho_arquivo_tmp or not os.path.isfile(caminho_arquivo_tmp):
+        messagebox.showerror("Erro", "Nenhuma macro para salvar. Primeiro exporte a macro.")
         return
 
-    # Verifica se o arquivo já é um macro salvo em disco
-    if os.path.isfile(caminho_arquivo_tmp) and os.path.basename(caminho_arquivo_tmp) == "macro.json":
-        destino_macro_dir = os.path.dirname(caminho_arquivo_tmp)
-        destino_img_dir = os.path.join(destino_macro_dir, "img")
-        os.makedirs(destino_img_dir, exist_ok=True)
+    # carrega dados para obter nome e identificar imagens
+    with open(caminho_arquivo_tmp, "r", encoding="utf-8") as f:
+        data = json.load(f)
 
-        for acao in actions:
-            if acao.get("type") == "imagem" and "imagem" in acao:
-                nome_arquivo = os.path.basename(acao["imagem"])
-                origem_tmp = os.path.join(TMP_DIR, nome_arquivo)
-                destino = os.path.join(destino_img_dir, nome_arquivo)
+    nome = data.get("macro_name")
+    # se não há nome definido, solicita
+    if not nome:
+        nome = simpledialog.askstring("Salvar macro", "Digite o nome da macro:")
+        if not nome:
+            return
 
-                if os.path.exists(origem_tmp):
-                    try:
-                        shutil.move(origem_tmp, destino)
-                        print(f"[INFO] Imagem movida da TMP: {origem_tmp} -> {destino}")
-                    except Exception as e:
-                        print(f"[ERRO] Falha ao mover imagem da TMP: {e}")
-                elif not os.path.exists(destino):
-                    print(f"[ERRO] Imagem não encontrada nem na TMP nem no destino: {nome_arquivo}")
-
-                acao["imagem"] = f"img/{nome_arquivo}"
-
-        with open(caminho_arquivo_tmp, "w", encoding="utf-8") as f:
-            json.dump(actions, f, indent=2)
-
-        limpar_tmp()
-        messagebox.showinfo("Salvo", f"Macro atualizado: {caminho_arquivo_tmp}")
-        return
-
-    # Caso contrário, salvar como novo
-    nome_macro = simpledialog.askstring("Salvar macro", "Digite o nome da macro:")
-    if not nome_macro:
-        return
-
-    destino_macro_dir = os.path.join(MACROS_DIR, nome_macro)
-    destino_img_dir = os.path.join(destino_macro_dir, "img")
+    # define pastas de destino
+    destino_dir = os.path.join(MACROS_DIR, nome)
+    destino_img_dir = os.path.join(destino_dir, "img")
     os.makedirs(destino_img_dir, exist_ok=True)
 
-    actions_salvas = copy.deepcopy(actions)
+    # move imagens referenciadas em params
+    for bloco in data.get("blocks", []):
+        params = bloco.get("params", {})
+        if params.get("type") == "imagem" and params.get("imagem"):
+            img_name = os.path.basename(params["imagem"])
+            tmp_img = os.path.join(TMP_DIR, img_name)
+            dest_img = os.path.join(destino_img_dir, img_name)
+            if os.path.exists(tmp_img):
+                shutil.move(tmp_img, dest_img)
+            elif not os.path.exists(dest_img):
+                print(f"[Aviso] Imagem não encontrada: {img_name}")
+            # atualiza caminho no JSON
+            params["imagem"] = os.path.join("img", img_name)
 
-    for acao in actions_salvas:
-        if acao.get("type") == "imagem" and "imagem" in acao:
-            nome_arquivo = os.path.basename(acao["imagem"])
-            origem_tmp = os.path.join(TMP_DIR, nome_arquivo)
-            destino = os.path.join(destino_img_dir, nome_arquivo)
+    # salva JSON final em destino_dir/macro.json
+    final_path = os.path.join(destino_dir, "macro.json")
+    with open(final_path, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
 
-            if os.path.exists(origem_tmp):
-                try:
-                    shutil.move(origem_tmp, destino)
-                    print(f"[INFO] Imagem movida da TMP: {origem_tmp} -> {destino}")
-                except Exception as e:
-                    print(f"[ERRO] Falha ao mover imagem da TMP: {e}")
-            elif not os.path.exists(destino):
-                print(f"[ERRO] Imagem não encontrada nem na TMP nem no destino: {nome_arquivo}")
-
-            acao["imagem"] = f"img/{nome_arquivo}"
-
-    with open(os.path.join(destino_macro_dir, "macro.json"), "w", encoding="utf-8") as f:
-        json.dump(actions_salvas, f, indent=2)
-
-    caminho_arquivo_tmp = os.path.join(destino_macro_dir, "macro.json")
+    # limpa tmp
     limpar_tmp()
-    messagebox.showinfo("Salvo", f"Macro salvo em: {destino_macro_dir}")
+
+    caminho_arquivo_tmp = final_path
+    messagebox.showinfo("Salvo", f"Macro salva em: {final_path}")
+    return final_path
+
 
 def limpar_tmp():
-    if os.path.exists(TMP_DIR):
+    """
+    Remove todos os arquivos em TMP_DIR.
+    """
+    if os.path.isdir(TMP_DIR):
         for f in os.listdir(TMP_DIR):
             caminho = os.path.join(TMP_DIR, f)
-            if os.path.isfile(caminho):
-                os.remove(caminho)
+            try:
+                if os.path.isfile(caminho):
+                    os.remove(caminho)
+                elif os.path.isdir(caminho):
+                    shutil.rmtree(caminho)
+            except Exception:
+                pass
 
-def novo_projeto(update_list, actions):
-    resposta = messagebox.askyesnocancel("Novo Projeto", "Deseja salvar a macro atual antes de criar uma nova?")
-    if resposta is None:
-        return
-    elif resposta:
-        salvar_macro_gui(actions)
-
-    actions.clear()
-    criar_macro_temporaria(actions)
-    update_list()
-
-def carregar(update_list, actions):
-    global caminho_arquivo_tmp  # ← necessário!
-
-    caminho = filedialog.askopenfilename(
-        initialdir=MACROS_DIR,
-        title="Abrir macro",
-        filetypes=[("macro.json", "macro.json")]
-    )
-    if caminho:
-        try:
-            with open(caminho, "r", encoding="utf-8") as f:
-                actions.clear()
-                actions.extend(json.load(f))
-            caminho_arquivo_tmp = caminho  # ← ESSENCIAL!
-            update_list()
-        except Exception as e:
-            messagebox.showerror("Erro ao carregar", str(e))
 
 def obter_caminho_macro_atual():
+    """
+    Retorna o diretório da última macro salva (ou None).
+    """
     if caminho_arquivo_tmp:
         return os.path.dirname(os.path.abspath(caminho_arquivo_tmp))
     return None
-

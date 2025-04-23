@@ -18,7 +18,8 @@ class SetaManager:
 
 
     #  setas.py  ─ dentro da classe SetaManager
-    def iniciar_conexao(self, bloco_origem, event):
+    def iniciar_conexao(self, bloco_origem, event, branch=None):
+        self.branch = branch  # salva se é true/false
         #  ⬇  pega o centro do bloco; se não existir, aborta silenciosamente
         centro = self._centro_bloco(bloco_origem)
         if centro is None:
@@ -199,6 +200,15 @@ class SetaManager:
                 y2 = dy2
 
         linha = self.canvas.create_line(x1, y1, x2, y2, arrow="last", width=2)
+        color = "#000"  # default
+        if hasattr(self, "branch") and self.branch == "true" and origem.get("true_handle"):
+            color = "green"
+        elif hasattr(self, "branch") and self.branch == "false" and origem.get("false_handle"):
+            color = "red"
+        linha = self.canvas.create_line(x1, y1, x2, y2, arrow="last", width=2, fill=color)
+        # limpa a flag para a próxima conexão
+        self.branch = None
+        self.setas.append((linha, origem, destino))
         self.setas.append((linha, origem, destino))
 
     def atualizar_setas(self):
