@@ -1,5 +1,6 @@
 from PIL import Image, ImageTk
 import os
+import tkinter as tk
 
 class BlocoManager:
     def __init__(self, canvas, app):
@@ -98,8 +99,56 @@ class BlocoManager:
             "height": self.block_height,
             "text": nome
         }
+        
+        if icon is not None:                                   #  ← nova
+            self.canvas.tag_bind(icon, "<Enter>",              #  ← nova
+                                 lambda e, b=bloco: self._show_handles(b))  #  ← nova
+            self.canvas.tag_bind(icon, "<Leave>",
+                                 lambda e, b=bloco: self._hide_handles(b))
+        # --- pequenos "+" que só aparecem no hover --------------------------
+        size = 10      # Largura/altura do quadradinho
+        half = size // 2
+        cx, cy = x + self.block_width // 2, y + self.block_height // 2
+        # coordenadas dos 4 lados
+        pontos = [
+            (cx, y - half),                      # topo
+            (cx, y + self.block_height - half), # base
+            (x - half, cy),                      # esquerda
+            (x + self.block_width - half, cy)    # direita
+        ]
+
+        group_tag = f"bloco{len(self.blocks)}"
+        self.canvas.addtag_withtag(group_tag, rect)          # retângulo base
+        if icon is not None:
+            self.canvas.addtag_withtag(group_tag, icon)      # imagem
+        # “handles” (⊕) são criados logo abaixo; vamos guardar suas IDs
+        handles = []
+        for hx, hy in pontos:
+            h = self.canvas.create_text(hx, hy, text="⊕", fill="#0a84ff",
+                                         state="hidden", font=("Arial", 10, "bold"))
+            handles.append(h)
+            self.canvas.addtag_withtag("handle", h)
+            self.canvas.tag_bind(h, "<ButtonPress-1>",
+                                 lambda e, b=bloco: self._handle_press(b, e))
+            self.canvas.addtag_withtag(group_tag, h)
+
+        bloco["handles"] = handles
+
+        self.canvas.tag_bind(group_tag, "<Enter>",
+                         lambda e, b=bloco: self._show_handles(b))
+        self.canvas.tag_bind(group_tag, "<Leave>",
+                         lambda e, b=bloco: self._hide_handles(b))
+    
         self.blocks.append(bloco)
         return bloco
+
+    def _handle_press(self, bloco, event):
+        """Clique no ⊕ inicia a conexão e impede arrasto do bloco."""
+        # garante que nenhum bloco entre em modo de arrasto
+        self.arrastando = None
+        self.app.setas.iniciar_conexao(bloco, event)
+        return "break"
+        
 
     def _mapear_nome_para_icone(self, nome):
         mapa = {
@@ -120,6 +169,11 @@ class BlocoManager:
         return mapa.get(nome.strip().lower(), "default.png")
 
     def canvas_clique(self, event):
+        if getattr(self.app.setas, "handle_drag", None):
+            return "break"
+        item_atual = self.canvas.find_withtag("current")
+        if item_atual and "handle" in self.canvas.gettags(item_atual[0]):
+            return "break"          # ignora completamente cliques sobre ⊕
         x, y = self.canvas.canvasx(event.x), self.canvas.canvasy(event.y)
         ctrl = event.state & 0x0004 
         
@@ -184,6 +238,8 @@ class BlocoManager:
         return "break"
 
     def mover_bloco(self, event):
+        if getattr(self.app.setas, "handle_drag", None):
+            return
         if self.selecao_iniciada:
             self.atualizar_selecao_area(event)
             return
@@ -216,6 +272,8 @@ class BlocoManager:
                 self.canvas.coords(bloco["borda"],
                                    bx1-2, by1-2, bx2+2, by2+2)
             bloco["x"], bloco["y"] = bx1, by1
+            self._recolocar_handles(bloco)
+
 
         # atualiza setas 1× (não precisa por bloco)
         self.app.setas.atualizar_setas()
@@ -406,3 +464,36 @@ class BlocoManager:
             self.canvas.tag_lower(borda, novo["rect"])
             novo["borda"] = borda
             self.app.itens_selecionados.append(("bloco", novo))
+
+    def _show_handles(self, bloco):
+        self._recolocar_handles(bloco)
+        for h in bloco.get("handles", []):
+            try:
+                self.canvas.itemconfigure(h, state="normal")
+            except tk.TclError:
+                pass          # handle já foi destruído
+
+    def _hide_handles(self, bloco):
+        for h in bloco.get("handles", []):
+            try:
+                self.canvas.itemconfigure(h, state="hidden")
+            except tk.TclError:
+                pass
+
+    def _recolocar_handles(self, bloco):
+        """Reposiciona os ⊕ de acordo com a posição atual do bloco."""
+        if not bloco.get("handles"):
+            return
+        size  = 10
+        half  = size // 2
+        x1, y1, x2, y2 = self.canvas.coords(bloco["rect"])
+        cx  = (x1 + x2) / 2
+        cy  = (y1 + y2) / 2
+        novos = [
+            (cx,        y1 - half),   # topo
+            (cx,        y2 - half),   # base
+            (x1 - half, cy),          # esquerda
+            (x2 - half, cy)           # direita
+        ]
+        for h, (hx, hy) in zip(bloco["handles"], novos):
+            self.canvas.coords(h, hx, hy)

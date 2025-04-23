@@ -13,6 +13,96 @@ class SetaManager:
 
         self.linha_temporaria = None
 
+        self.handle_drag = None          # (bloco_origem, linha_temp_id)
+        self.alvo_proximo = None         # bloco que está “magnetizado”
+
+
+    #  setas.py  ─ dentro da classe SetaManager
+    def iniciar_conexao(self, bloco_origem, event):
+        #  ⬇  pega o centro do bloco; se não existir, aborta silenciosamente
+        centro = self._centro_bloco(bloco_origem)
+        if centro is None:
+            return                      # bloco foi removido → nada a fazer
+    
+        x1, y1 = centro
+        x2, y2 = self.canvas.canvasx(event.x), self.canvas.canvasy(event.y)
+    
+        temp = self.canvas.create_line(
+            x1, y1, x2, y2,
+            fill="#0a84ff", dash=(4, 2), width=2
+        )
+        self.handle_drag = (bloco_origem, temp)
+        #self.canvas.bind("<B1-Motion>", self._arrastando_handle)
+        self.canvas.bind("<B1-Motion>", self._arrastando_handle, add="+")
+        self.canvas.bind("<ButtonRelease-1>", self._finalizar_handle, add="+")
+
+
+    def _arrastando_handle(self, event):
+        if not self.handle_drag:
+            return
+        origem, temp = self.handle_drag
+        x1, y1 = self._centro_bloco(origem)
+        x2, y2 = self.canvas.canvasx(event.x), self.canvas.canvasy(event.y)
+
+        # procura bloco mais próximo (centro) dentro de 25 px
+        alvo, dist2 = None, 25**2
+        for bloco in self.blocos.blocks:
+            if bloco is origem:
+                continue
+            c = self._centro_bloco(bloco)
+            if c is None:
+                continue          # ignora blocos órfãos
+            cx, cy = c
+            d2 = (cx - x2)**2 + (cy - y2)**2
+            if d2 < dist2:
+                alvo, dist2 = bloco, d2
+                x2, y2 = cx, cy      # “gruda” a linha
+        # realça o bloco alvo
+        if alvo is not self.alvo_proximo:
+            # remove highlight anterior
+            if self.alvo_proximo and self.alvo_proximo.get("highlight"):
+                self.canvas.delete(self.alvo_proximo["highlight"])
+                self.alvo_proximo["highlight"] = None
+            self.alvo_proximo = alvo
+            if alvo:
+                bx1, by1, bx2, by2 = self.canvas.coords(alvo["rect"])
+                alvo["highlight"] = self.canvas.create_rectangle(
+                    bx1-3, by1-3, bx2+3, by2+3,
+                    outline="#0a84ff", width=2, dash=(2, 2)
+                )
+        if x2 is None or y2 is None:
+            return            # ainda não há destino “magnético”
+
+        # atualiza a linha temporária
+        self.canvas.coords(temp, x1, y1, x2, y2)
+
+    def _finalizar_handle(self, event):
+        #self.canvas.unbind("<B1-Motion>")
+        #self.canvas.unbind("<ButtonRelease-1>")
+        if not self.handle_drag:
+            return
+        origem, temp = self.handle_drag
+        self.canvas.delete(temp)
+        self.handle_drag = None
+
+        destino = self.alvo_proximo
+        # limpa highlight
+        if destino and destino.get("highlight"):
+            self.canvas.delete(destino["highlight"])
+            destino["highlight"] = None
+        self.alvo_proximo = None
+
+         # ------------ BLINDAGENS ------------
+        if not destino:                 # soltou fora de qualquer bloco
+            return
+        if destino is origem:           # evita seta origem→origem
+            return
+        if self._centro_bloco(destino) is None:
+            return                      # destino foi removido no meio do arrasto
+        # ------------------------------------
+        if destino:
+            self.desenhar_linha(origem, destino)
+
     def atualizar_linha_temporaria(self, event):
         if self.linha_temporaria and self.bloco_origem:
             x1, y1 = self._centro_bloco(self.bloco_origem)
@@ -66,8 +156,11 @@ class SetaManager:
 
     def _centro_bloco(self, bloco):
         coords = self.canvas.coords(bloco["rect"])
+        if len(coords) < 4:           # retângulo já foi excluído
+            return None
         x1, y1, x2, y2 = coords
         return (x1 + x2) / 2, (y1 + y2) / 2
+
 
     def desenhar_linha(self, origem, destino):
         coords_origem = self.canvas.coords(origem["rect"])
