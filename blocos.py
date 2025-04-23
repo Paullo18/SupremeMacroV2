@@ -266,13 +266,14 @@ class BlocoManager:
                 return "break"   # impede que o clique caia no SetaManager
             
             # 2) Clique em área vazia → inicia retângulo de seleção
+        self.app.setas.limpar_selecao()
+        # 2) remove as bordas de todos os blocos que ainda estavam selecionados
         for tipo, bloco in list(self.app.itens_selecionados):
             if tipo == "bloco" and bloco.get("borda"):
                 self.canvas.delete(bloco["borda"])
                 bloco["borda"] = None
-        # limpa lista de itens selecionados e destaque de setas
+        # 3) finalmente esvazia a lista de seleção
         self.app.itens_selecionados.clear()
-        self.app.setas.limpar_selecao()
 
         # agora inicia retângulo de seleção por área
         self.selecao_iniciada = True
