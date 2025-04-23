@@ -1,11 +1,28 @@
 from PIL import Image, ImageTk
 import os
 import tkinter as tk
+from tkinter import ttk, filedialog, messagebox
+from gui.janela_clique import add_click
+from gui.janela_delay import add_delay
+from gui.janela_goto import add_goto
+from gui.janela_imagem import add_imagem
+from gui.janela_label import add_label
+from gui.janela_loop import add_loop
+from gui.janela_ocr import add_ocr
+from gui.janela_ocr_duplo import add_ocr_duplo
+from core.update_list import update_list
+import threading, time, pyautogui, keyboard
+from tkinter import Toplevel, IntVar, Label, Entry
+import pytesseract
+
 
 class BlocoManager:
     def __init__(self, canvas, app):
         self.canvas = canvas
         self.app = app
+        # capta duplo‐clique geral no canvas
+        self.canvas.bind("<Double-Button-1>", self._on_canvas_double_click, add="+")
+
         self.blocks = []
         self.ocupados = set()
         self.block_width = 112
@@ -43,6 +60,7 @@ class BlocoManager:
 
         self._has_moved = False
 
+               
     def finalizar_arrasto(self, event):
 
          # rotina já existente
@@ -138,7 +156,33 @@ class BlocoManager:
                          lambda e, b=bloco: self._show_handles(b))
         self.canvas.tag_bind(group_tag, "<Leave>",
                          lambda e, b=bloco: self._hide_handles(b))
-    
+        
+        lt = nome.strip().lower()
+        if lt == "clique":
+            self.canvas.tag_bind(group_tag, "<Double-Button-1>",
+                                 lambda e, b=bloco: self._on_double_click_click(b))
+        elif lt == "delay":
+            self.canvas.tag_bind(group_tag, "<Double-Button-1>",
+                                 lambda e, b=bloco: self._on_double_click_delay(b))
+        elif lt == "goto":
+            self.canvas.tag_bind(group_tag, "<Double-Button-1>",
+                                 lambda e, b=bloco: self._on_double_click_goto(b))
+        elif lt == "se imagem":
+            self.canvas.tag_bind(group_tag, "<Double-Button-1>",
+                                 lambda e, b=bloco: self._on_double_click_imagem(b))
+        elif lt == "label":
+            self.canvas.tag_bind(group_tag, "<Double-Button-1>",
+                                 lambda e, b=bloco: self._on_double_click_label(b))
+        elif lt == "loop":
+            self.canvas.tag_bind(group_tag, "<Double-Button-1>",
+                                 lambda e, b=bloco: self._on_double_click_loop(b))
+        elif lt == "ocr":
+            self.canvas.tag_bind(group_tag, "<Double-Button-1>",
+                                 lambda e, b=bloco: self._on_double_click_ocr(b))
+        elif lt == "ocr duplo":
+            self.canvas.tag_bind(group_tag, "<Double-Button-1>",
+                                 lambda e, b=bloco: self._on_double_click_ocr_duplo(b))
+
         self.blocks.append(bloco)
         return bloco
 
@@ -351,6 +395,12 @@ class BlocoManager:
             bloco["x"], bloco["y"] = bx1, by1
             self._recolocar_handles(bloco)
 
+            if bloco.get("label_id"):
+                # nova posição: centro horizontal + abaixo do bloco
+                new_label_x = bloco["x"] + bloco["width"]/2
+                new_label_y = bloco["y"] + bloco["height"] + 8
+                self.canvas.coords(bloco["label_id"], new_label_x, new_label_y)
+
 
         # atualiza setas 1× (não precisa por bloco)
         self.app.setas.atualizar_setas()
@@ -400,14 +450,17 @@ class BlocoManager:
 
     #  (A) utilitário: snapshot p/ ‘undo’
     def _snapshot(self):
+        # agora incluímos também a ação (ou None)
         estado_blocos = [
-            (b["text"], b["x"], b["y"]) for b in self.blocks
+            (b["text"], b["x"], b["y"], b.get("acao"))
+            for b in self.blocks
         ]
         estado_setas = [
-            (self.blocks.index(o), self.blocks.index(d))  # índices
+            (self.blocks.index(o), self.blocks.index(d))
             for _, o, d in self.app.setas.setas
         ]
         return (estado_blocos, estado_setas)
+
 
     def _restaurar_snapshot(self, snap):
         self._is_restoring = True          # ↓↓↓     evita pushes internos
@@ -425,6 +478,9 @@ class BlocoManager:
                 self.canvas.delete(bloco["borda"])
             for h in bloco.get("handles", []):
                 self.canvas.delete(h)
+            if bloco.get("label_id"):
+                self.canvas.delete(bloco["label_id"])
+        self.canvas.delete(bloco["rect"])
 
         self.blocks.clear()
         self.ocupados.clear()
@@ -435,13 +491,48 @@ class BlocoManager:
         self.app.setas.setas.clear()
 
         # --- recria blocos ---
-        for text, x, y in blocos_info:
-            novo = self.adicionar_bloco(text, "white")   # não empilha snapshot
-            self.canvas.coords(novo["rect"], x, y,
-                               x+novo["width"], y+novo["height"])
+        for text, x, y, acao in blocos_info:
+            novo = self.adicionar_bloco(text, "white")
+            # reposiciona retângulo e ícone
+            self.canvas.coords(novo["rect"], x, y, x+novo["width"], y+novo["height"])
             if novo.get("icon"):
                 self.canvas.coords(novo["icon"], x, y)
             novo["x"], novo["y"] = x, y
+
+            # se havia ação de clique, restaura também o label
+            if acao:
+                novo["acao"] = acao
+                tipo = acao.get("type")
+                if tipo == "click":
+                    txt = f"Click @({acao['x']},{acao['y']})"
+                elif tipo == "delay":
+                    txt = f"Delay: {acao['time']}ms"
+                elif tipo == "goto":
+                    txt = f"GOTO → {acao['label']}"
+                elif tipo == "imagem":
+                    txt = f"Img:{acao['imagem']} @({acao['x']},{acao['y']},{acao['w']},{acao['h']})"
+                elif tipo == "label":
+                    txt = f"Label: {acao['name']}"
+                elif acao["type"] == "loopstart":
+                    if acao.get("mode") == "quantidade":
+                        txt = f"INÍCIO LOOP {acao['count']}x"
+                    else:
+                        txt = "INÍCIO LOOP INFINITO"
+                elif acao["type"] == "ocr":
+                        txt = f"OCR: '{acao['text']}'"
+                elif acao["type"] == "ocr_duplo":
+                        txt = f"OCR: '{acao['text1']}' e '{acao['text2']}'"
+                else:
+                    txt = f"{tipo.upper()}"
+                label_id = self.canvas.create_text(
+                    x + novo["width"]/2,
+                    y + novo["height"] + 8,
+                    text=txt,
+                    font=("Arial", 9),
+                    fill="black"
+                )
+                novo["label_id"] = label_id
+
 
         # --- recria setas ---
         for idx_o, idx_d in setas_info:
@@ -475,7 +566,11 @@ class BlocoManager:
         self._undo_stack.append(self._snapshot());  self._redo_stack.clear()
         for tipo, item in list(self.app.itens_selecionados):
             if tipo == "bloco":
+                # remove setas conectadas
                 self.app.setas.remover_setas_de_bloco(item)
+                # remove o retângulo, ícone, borda, handles e o label se existir
+                if item.get("label_id"):
+                    self.canvas.delete(item["label_id"])
                 self.canvas.delete(item["rect"])
                 if item.get("icon"):
                     self.canvas.delete(item["icon"])
@@ -617,3 +712,295 @@ class BlocoManager:
                 seen.add(obj_id)
                 out.append(item)
         return out
+
+    def _on_double_click(self, bloco):
+       """
+       Reusa exatamente a janela de janela_clique.py para capturar o click,
+       e depois aplica a ação ao bloco no canvas.
+       """
+       # 1) cria um buffer exclusivo para este bloco
+       bloco["_click_buffer"] = []
+       # 2) define o callback que será chamado
+       #    logo após inserir a ação no buffer
+       def finish():
+           # pega a última ação inserida
+           ac = bloco["_click_buffer"][-1]
+           # guarda oficialmente em bloco["acao"]
+           bloco["acao"] = ac
+           # apaga label antigo, se existir
+           if bloco.get("label_id"):
+               self.canvas.delete(bloco["label_id"])
+           # desenha o texto logo abaixo do bloco
+           bx, by = bloco["x"], bloco["y"]
+           w, h   = bloco["width"], bloco["height"]
+           texto  = f"Click @({ac['x']},{ac['y']})"
+           label_x = bx + w/2
+           label_y = by + h + 8
+           bloco["label_id"] = self.canvas.create_text(
+               label_x, label_y,
+               text=texto, font=("Arial", 9), fill="black"
+           )
+           # empilha snapshot para permitir undo desta mudança
+           if not self._is_restoring:
+               self._undo_stack.append(self._snapshot())
+               self._redo_stack.clear()
+       # 3) chama sua janela existente
+       add_click(
+           actions     = bloco["_click_buffer"],
+           update_list = finish,
+           tela        = self.app.root
+       )
+
+    def _on_double_click_delay(self, bloco):
+        bloco["_delay_buffer"] = []
+        def finish():
+            # 1) empilha o estado _antes_ de alterar a ação
+            if not self._is_restoring:
+                self._undo_stack.append(self._snapshot())
+                self._redo_stack.clear()
+    
+            # 2) grava a ação de delay e desenha o label
+            ac = bloco["_delay_buffer"][-1]
+            bloco["acao"] = ac
+            if bloco.get("label_id"):
+                self.canvas.delete(bloco["label_id"])
+            bx, by = bloco["x"], bloco["y"]
+            w, h   = bloco["width"], bloco["height"]
+            texto = f"Delay: {ac['time']}ms"
+            bloco["label_id"] = self.canvas.create_text(
+                bx + w/2,
+                by + h + 8,
+                text=texto, font=("Arial", 9), fill="black"
+            )
+            # (não precisa do snapshot nem aqui)
+        add_delay(
+            actions     = bloco["_delay_buffer"],
+            update_list = finish,
+            tela        = self.app.root
+        )
+
+    def _on_double_click_goto(self, bloco):
+        """
+        Abre a janela de goto, grava em bloco['acao'] e desenha o texto abaixo.
+        """
+        # buffer temporário para undo
+        bloco["_goto_buffer"] = []
+
+        def finish():
+            # 1) empilha estado ANTES da mudança
+            if not self._is_restoring:
+                self._undo_stack.append(self._snapshot())
+                self._redo_stack.clear()
+
+            # 2) grava a ação e desenha o label
+            ac = bloco["_goto_buffer"][-1]
+            bloco["acao"] = ac
+            if bloco.get("label_id"):
+                self.canvas.delete(bloco["label_id"])
+
+            bx, by = bloco["x"], bloco["y"]
+            w, h   = bloco["width"], bloco["height"]
+            texto = f"GOTO → {ac['label']}"
+            bloco["label_id"] = self.canvas.create_text(
+                bx + w/2,
+                by + h + 8,
+                text=texto,
+                font=("Arial", 9),
+                fill="black"
+            )
+            # não é preciso empilhar de novo aqui
+        # chama a janela
+        add_goto(
+            actions     = bloco["_goto_buffer"],
+            update_list = finish,
+            tela        = self.app.root
+        )
+
+    def _on_double_click_imagem(self, bloco):
+        """
+        Abre a janela de reconhecimento de imagem, grava em bloco['acao']
+        e desenha o texto abaixo.
+        """
+        # buffer temporário para undo
+        bloco["_img_buffer"] = []
+        def finish():
+            # 1) empilha snapshot ANTES da mudança
+            if not self._is_restoring:
+                self._undo_stack.append(self._snapshot())
+                self._redo_stack.clear()
+            # 2) grava a ação e desenha o label
+            ac = bloco["_img_buffer"][-1]
+            bloco["acao"] = ac
+            if bloco.get("label_id"):
+                self.canvas.delete(bloco["label_id"])
+            bx, by = bloco["x"], bloco["y"]
+            w, h   = bloco["width"], bloco["height"]
+            # exibe o nome do arquivo + dimensões
+            texto = f"Img:{ac['imagem']} @({ac['x']},{ac['y']},{ac['w']},{ac['h']})"
+            bloco["label_id"] = self.canvas.create_text(
+                bx + w/2, by + h + 8,
+                text=texto, font=("Arial", 9), fill="black"
+            )
+        # chama a janela adaptada
+        add_imagem(
+            actions     = bloco["_img_buffer"],
+            update_list = finish,
+            tela        = self.app.root
+        )
+
+    def _on_double_click_label(self, bloco):
+        """
+        Abre a janela de Label, grava em bloco['acao']
+        e desenha o texto abaixo do bloco.
+        """
+        # buffer temporário para undo
+        bloco["_label_buffer"] = []
+
+        def finish():
+            # empilha snapshot antes da mudança
+            if not self._is_restoring:
+                self._undo_stack.append(self._snapshot())
+                self._redo_stack.clear()
+
+            # pega a ação e desenha
+            ac = bloco["_label_buffer"][-1]
+            bloco["acao"] = ac
+            # remove label antigo (se existir)
+            if bloco.get("label_id"):
+                self.canvas.delete(bloco["label_id"])
+            bx, by = bloco["x"], bloco["y"]
+            w, h   = bloco["width"], bloco["height"]
+            texto  = f"Label: {ac['name']}"
+            bloco["label_id"] = self.canvas.create_text(
+                bx + w/2, by + h + 8,
+                text=texto, font=("Arial", 9), fill="black"
+            )
+
+        # chama a janela adaptada
+        add_label(
+            actions     = bloco["_label_buffer"],
+            update_list = finish,
+            tela        = self.app.root
+        )
+
+    def _on_double_click_loop(self, bloco):
+        """
+        Abre a janela de Loop, grava em bloco['acao']
+        e desenha o texto abaixo do bloco.
+        """
+        # 1) buffer temporário
+        bloco["_loop_buffer"] = []
+
+        # 2) callback de finalização
+        def finish():
+            # empilha snapshot antes de aplicar
+            if not self._is_restoring:
+                self._undo_stack.append(self._snapshot())
+                self._redo_stack.clear()
+
+            ac = bloco["_loop_buffer"][-1]
+            bloco["acao"] = ac
+            # remove label anterior
+            if bloco.get("label_id"):
+                self.canvas.delete(bloco["label_id"])
+            bx, by = bloco["x"], bloco["y"]
+            w, h = bloco["width"], bloco["height"]
+            if ac["mode"] == "quantidade":
+                txt = f"INÍCIO LOOP {ac['count']}x"
+            else:
+                txt = "INÍCIO LOOP INFINITO"
+            bloco["label_id"] = self.canvas.create_text(
+                bx + w/2, by + h + 8,
+                text=txt, font=("Arial", 9), fill="black"
+            )
+
+        # 3) chama a janela adaptada
+        add_loop(
+            actions     = bloco["_loop_buffer"],
+            update_list = finish,
+            tela        = self.app.root
+        )
+    def _on_double_click_ocr(self, bloco):
+        """
+        Reusa sua janela de OCR para capturar a ação,
+        grava em bloco['acao'] e desenha o texto abaixo.
+        """
+        bloco["_ocr_buffer"] = []
+        def finish():
+            ac = bloco["_ocr_buffer"][-1]
+            bloco["acao"] = ac
+            # Apaga label antigo
+            if bloco.get("label_id"):
+                self.canvas.delete(bloco["label_id"])
+            # Desenha novo label abaixo do bloco
+            bx, by = bloco["x"], bloco["y"]
+            w, h = bloco["width"], bloco["height"]
+            texto = f"OCR: '{ac['text']}'"
+            bloco["label_id"] = self.canvas.create_text(
+                bx + w/2, by + h + 8,
+                text=texto, font=("Arial", 9), fill="black"
+            )
+            # Empilha snapshot para poder desfazer
+            if not self._is_restoring:
+                self._undo_stack.append(self._snapshot())
+                self._redo_stack.clear()
+
+        # Chama sua janela_ocr existente
+        add_ocr(
+            actions     = bloco["_ocr_buffer"],
+            update_list = finish,
+            tela        = self.app.root
+        )
+
+    def _on_double_click_ocr_duplo(self, bloco):
+        """
+        Open the OCR Duplo dialog, store the action in bloco['acao'],
+        and draw its summary below the block.
+        """
+        bloco["_od_buffer"] = []
+
+        def finish():
+            # record pre-change snapshot
+            if not self._is_restoring:
+                self._undo_stack.append(self._snapshot())
+                self._redo_stack.clear()
+
+            ac = bloco["_od_buffer"][-1]
+            bloco["acao"] = ac
+            # remove previous label
+            if bloco.get("label_id"):
+                self.canvas.delete(bloco["label_id"])
+
+            # draw summary below
+            bx, by = bloco["x"], bloco["y"]
+            w, h   = bloco["width"], bloco["height"]
+            cond   = ac.get("condicao", "and").upper()
+            texto  = f"OCR Duplo: '{ac['text1']}' {cond} '{ac['text2']}'"
+            bloco["label_id"] = self.canvas.create_text(
+                bx + w/2, by + h + 8,
+                text=texto, font=("Arial", 9), fill="black"
+            )
+
+        # launch your new dialog
+        add_ocr_duplo(
+            actions     = bloco["_od_buffer"],
+            atualizar   = finish,
+            tela        = self.app.root,
+            listbox     = None
+        )
+    def _on_canvas_double_click(self, event):
+        """
+        Captura o duplo-clique em qualquer lugar do canvas,
+        verifica se foi num bloco 'Clique' e, se sim, dispara a janela.
+        """
+        x, y = self.canvas.canvasx(event.x), self.canvas.canvasy(event.y)
+        # procura o bloco que contém (x,y)
+        for bloco in self.blocks:
+            x1, y1, x2, y2 = self.canvas.coords(bloco["rect"])
+            if x1 <= x <= x2 and y1 <= y <= y2:
+                # só dispara se for exatamente o bloco "Clique"
+                if bloco["text"].strip().lower() == "clique":
+                    return self._on_double_click(bloco)
+                else:
+                    return  # não é bloco click, ignora
+        # se clicou no canvas vazio, não faz nada

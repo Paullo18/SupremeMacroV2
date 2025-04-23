@@ -1,10 +1,12 @@
 import tkinter as tk
+from tkinter import ttk, filedialog, messagebox
 from blocos import BlocoManager
 from setas import SetaManager
 from eventos import bind_eventos
 from util import clicou_em_linha
 from PIL import Image, ImageTk
-import os
+from core.update_list import update_list
+import json, os
 
 class FlowchartApp:
     def __init__(self, root):
@@ -36,6 +38,7 @@ class FlowchartApp:
         # Canvas
         self.canvas = tk.Canvas(root, bg="#c3cfe2", bd=0, highlightthickness=0)  # azul acinzentado suave
         self.canvas.pack(side="right", fill="both", expand=True, padx=6, pady=6)
+
 
         # Gerenciadores
         self.blocos = BlocoManager(self.canvas, self)
@@ -107,14 +110,77 @@ class FlowchartApp:
 
     def executar_acao_topo(self, nome):
         if nome == "Novo":
-            print("🔄 Novo projeto")
-            # TODO: limpar canvas, resetar estados
-        elif nome == "Salvar":
-            print("💾 Salvar macro")
-            # TODO: abrir diálogo e salvar .json
+            # limpa tudo e cria novos managers
+            self.canvas.delete("all")
+            self.blocos = BlocoManager(self.canvas, self)
+            self.setas  = SetaManager(self.canvas, self.blocos)
+            bind_eventos(self.canvas, self.blocos, self.setas, self.root)
+            return
+
+        if nome == "Salvar":
+            path = filedialog.asksaveasfilename(
+                defaultextension=".json",
+                filetypes=[("JSON","*.json")],
+                title="Salvar macro como…"
+            )
+            if not path: return
+            # monta lista de ações a partir dos blocos no canvas
+            dados = []
+            for bloco in self.blocos.blocks:
+                if "acao" in bloco:
+                    ac = bloco["acao"].copy()
+                    ac["pos_x"] = bloco["x"]
+                    ac["pos_y"] = bloco["y"]
+                    dados.append(ac)
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump(dados, f, indent=2, ensure_ascii=False)
+            messagebox.showinfo("Salvo", f"Macro salva em:\n{path}")
+
         elif nome == "Carregar":
-            print("📂 Carregar macro")
-            # TODO: abrir .json e reconstruir blocos
+            path = filedialog.askopenfilename(
+                filetypes=[("JSON","*.json")],
+                title="Abrir macro"
+            )
+            if not path:
+                return
+
+            try:
+                # 1) carrega o JSON
+                with open(path, "r", encoding="utf-8") as f:
+                    acoes = json.load(f)  # espera uma lista de {"type":"click","x":..,"y":..}
+
+                # 2) limpa canvas e blocos antigos
+                self.canvas.delete("all")
+                self.blocos = BlocoManager(self.canvas, self)
+                self.setas  = SetaManager(self.canvas, self.blocos)
+                bind_eventos(self.canvas, self.blocos, self.setas, self.root)
+
+                # 3) recria cada bloco e seu label
+                for ac in acoes:
+                    if ac.get("type") == "click":
+                        bloco = self.blocos.adicionar_bloco("Clique", "white")
+                        # reposiciona retângulo e ícone
+                        px, py = ac.get("pos_x", bloco["x"]), ac.get("pos_y", bloco["y"])
+                        bx2, by2 = px + bloco["width"], py + bloco["height"]
+                        self.canvas.coords(bloco["rect"], px, py, bx2, by2)
+                        if bloco.get("icon"):
+                            self.canvas.coords(bloco["icon"], px, py)
+                        bloco["x"], bloco["y"] = px, py
+
+                        # guarda a ação e desenha o label
+                        bloco["acao"]    = ac
+                        txt = f"Click @({ac['x']},{ac['y']})"
+                        bloco["label_id"] = self.canvas.create_text(
+                            px + bloco["width"]/2,
+                            py + bloco["height"] + 8,
+                            text=txt, font=("Arial", 9), fill="black"
+                        )
+                messagebox.showinfo("Carregado", f"Macro carregada de:\n{path}")
+                return
+
+            except Exception as e:
+                messagebox.showerror("Erro ao carregar", str(e))
+
         elif nome == "Remover":
             print("🗑 Remover item(s) selecionado(s)")
             # usa a mesma rotina já ligada à tecla Delete
@@ -122,6 +188,12 @@ class FlowchartApp:
         elif nome == "Executar":
             print("▶ Executar macro")
             # TODO: iniciar execução dos blocos
+
+        # Gerenciadores de canvas
+        #self.blocos = BlocoManager(self.canvas, self)
+        #self.setas  = SetaManager(self.canvas, self.blocos)
+
+        #bind_eventos(self.canvas, self.blocos, self.setas, self.root)
 
 
 # Inicialização
