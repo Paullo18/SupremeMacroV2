@@ -165,36 +165,56 @@ class SetaManager:
 
     def selecionar_item(self, event):
         x, y = self.canvas.canvasx(event.x), self.canvas.canvasy(event.y)
-
-        # Reseta visual da seta anterior (se houver)
-        if self.ultima_seta_selecionada:
-            self.canvas.itemconfig(self.ultima_seta_selecionada, fill="black")
-            self.ultima_seta_selecionada = None
-
-        # Reseta visual do bloco anterior (se houver)
-        if self.blocos.borda_selecionada:
-            self.canvas.delete(self.blocos.borda_selecionada)
-            self.blocos.borda_selecionada = None
-
-        # Limpa seleção lógica
-        self.blocos.app.item_selecionado = None
+        ctrl = event.state & 0x0004  # Ctrl pressionado
 
         # Verifica se clicou em uma seta
         for seta_id, origem, destino in self.setas:
             coords = self.canvas.coords(seta_id)
             if clicou_em_linha(x, y, coords):
-                self.blocos.app.item_selecionado = ("seta", seta_id)
-                self.canvas.itemconfig(seta_id, fill="blue")
-                self.ultima_seta_selecionada = seta_id  # ← registra seta azul
+                if ctrl:
+                    if ("seta", seta_id) in self.blocos.app.itens_selecionados:
+                        self.blocos.app.itens_selecionados.remove(("seta", seta_id))
+                        self.canvas.itemconfig(seta_id, fill="black")
+                    else:
+                        self.blocos.app.itens_selecionados.append(("seta", seta_id))
+                        self.canvas.itemconfig(seta_id, fill="blue")
+                else:
+                    self._limpar_selecao()
+                    self.blocos.app.itens_selecionados = [("seta", seta_id)]
+                    self.canvas.itemconfig(seta_id, fill="blue")
                 return
 
         # Verifica se clicou em um bloco
         for bloco in self.blocos.blocks:
             coords = self.canvas.coords(bloco["rect"])
             if coords[0] <= x <= coords[2] and coords[1] <= y <= coords[3]:
-                self.blocos.app.item_selecionado = ("bloco", bloco)
-                self.blocos.destacar_bloco(bloco)
+                if ctrl:
+                    if ("bloco", bloco) in self.blocos.app.itens_selecionados:
+                        self.blocos.app.itens_selecionados.remove(("bloco", bloco))
+                        if bloco.get("borda"):
+                            self.canvas.delete(bloco["borda"])
+                            bloco["borda"] = None
+                    else:
+                        borda = self.canvas.create_rectangle(
+                            coords[0]-2, coords[1]-2, coords[2]+2, coords[3]+2,
+                            outline="blue", width=2, dash=(4, 2)
+                        )
+                        self.canvas.tag_lower(borda, bloco["rect"])
+                        bloco["borda"] = borda
+                        self.blocos.app.itens_selecionados.append(("bloco", bloco))
+                else:
+                    self._limpar_selecao()
+                    borda = self.canvas.create_rectangle(
+                        coords[0]-2, coords[1]-2, coords[2]+2, coords[3]+2,
+                        outline="blue", width=2, dash=(4, 2)
+                    )
+                    self.canvas.tag_lower(borda, bloco["rect"])
+                    bloco["borda"] = borda
+                    self.blocos.app.itens_selecionados = [("bloco", bloco)]
                 return
+
+        if not ctrl:
+            self._limpar_selecao()
 
     def deletar_item(self, event):
         if self.blocos.app.item_selecionado:
@@ -205,13 +225,18 @@ class SetaManager:
                 if item.get("icon"):
                     self.canvas.delete(item["icon"])
 
-                # Remove a borda se existir
+                # Remove a borda se existir (seleção única)
                 if self.blocos.borda_selecionada:
                     self.canvas.delete(self.blocos.borda_selecionada)
                     self.blocos.borda_selecionada = None
 
+                # Remove a borda se for de seleção múltipla
+                if item.get("borda"):
+                    self.canvas.delete(item["borda"])
+                    item["borda"] = None
+
                 # Remove imagem do cache
-                bloco_id = item.get("id")
+                bloco_id = item.get("id") or item.get("bloco_id")
                 if bloco_id and bloco_id in self.blocos.imagens:
                     del self.blocos.imagens[bloco_id]
 
@@ -229,12 +254,14 @@ class SetaManager:
                         novas_setas.append((seta_id, origem, destino))
                 self.setas = novas_setas
 
+                # Limpa seleção múltipla
+                self.blocos.blocos_selecionados = [b for b in self.blocos.blocos_selecionados if b != item]
+
             elif tipo == "seta":
                 self.canvas.delete(item)
                 self.setas = [s for s in self.setas if s[0] != item]
 
             self.blocos.app.item_selecionado = None
-
 
 
     def _desenhar_linha_visual(self, origem, destino):
@@ -275,3 +302,12 @@ class SetaManager:
                 y2 = dy2
     
         self.canvas.create_line(x1, y1, x2, y2, arrow="last", width=2)
+
+    def _limpar_selecao(self):
+        for tipo, item in self.blocos.app.itens_selecionados:
+            if tipo == "bloco" and item.get("borda"):
+                self.canvas.delete(item["borda"])
+                item["borda"] = None
+            elif tipo == "seta":
+                self.canvas.itemconfig(item, fill="black")
+        self.blocos.app.itens_selecionados.clear()

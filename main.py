@@ -45,6 +45,9 @@ class FlowchartApp:
         self.icones = {}
         self.icones_menu = {}
         self.icones_topo = {}
+        
+        self.itens_selecionados = []
+
 
         # Botões do topo
         botoes_topo = [
