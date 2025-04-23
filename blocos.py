@@ -172,6 +172,10 @@ class BlocoManager:
         if getattr(self.app.setas, "handle_drag", None):
             return "break"
         item_atual = self.canvas.find_withtag("current")
+        # Se o item atual é uma LINHA (seta), deixa o SetaManager cuidar
+        # da seleção; não devolve "break" nem executa o resto da rotina.
+        if item_atual and self.canvas.type(item_atual) == "line":
+            return  # Propaga o evento para outros bindings (SetaManager)
         if item_atual and "handle" in self.canvas.gettags(item_atual[0]):
             return "break"          # ignora completamente cliques sobre ⊕
         x, y = self.canvas.canvasx(event.x), self.canvas.canvasy(event.y)

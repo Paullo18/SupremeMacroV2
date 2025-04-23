@@ -116,8 +116,9 @@ class FlowchartApp:
             print("📂 Carregar macro")
             # TODO: abrir .json e reconstruir blocos
         elif nome == "Remover":
-            print("🗑 Remover item selecionado")
-            self.setas.deletar_item(None)
+            print("🗑 Remover item(s) selecionado(s)")
+            # usa a mesma rotina já ligada à tecla Delete
+            self.blocos.deletar_selecionados()
         elif nome == "Executar":
             print("▶ Executar macro")
             # TODO: iniciar execução dos blocos
