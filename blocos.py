@@ -213,6 +213,8 @@ class BlocoManager:
                         self.app.itens_selecionados.append(("bloco", bloco))
 
                 self._drag_group = [b for t, b in self.app.itens_selecionados if t == "bloco"]
+                 # garante que o bloco sob o mouse (e o grupo selecionado) fique no topo
+                self._bring_to_front(bloco)
 
                 return "break"   # impede que o clique caia no SetaManager
             
@@ -249,6 +251,10 @@ class BlocoManager:
             return
         if not self.arrastando:
             return
+        
+        # mantém o(s) bloco(s) que estão sendo arrastados acima
+        for b in (self._drag_group or [self.arrastando]):
+            self._bring_to_front(b)
         
         if not self._has_moved and not self._is_restoring:
             self._undo_stack.append(self._snapshot())
@@ -312,6 +318,8 @@ class BlocoManager:
                 )
                 self.canvas.tag_lower(borda, bloco["rect"])
                 bloco["borda"] = borda
+                # leva o bloco recém-selecionado para frente
+                self._bring_to_front(bloco)
                 self.app.itens_selecionados.append(("bloco", bloco))
 
         # remove o retângulo de seleção e reseta flags
@@ -514,3 +522,14 @@ class BlocoManager:
         ]
         for h, (hx, hy) in zip(bloco["handles"], novos):
             self.canvas.coords(h, hx, hy)
+
+    def _bring_to_front(self, bloco):
+        """Garante que o bloco e seus elementos fiquem acima dos demais."""
+        # a tag de grupo foi criada em adicionar_bloco()
+        for tag in self.canvas.gettags(bloco["rect"]):
+            if tag.startswith("bloco"):
+                self.canvas.tag_raise(tag)      # todo o grupo
+                break
+        # borda (se existir) deve ficar acima de tudo
+        if bloco.get("borda"):
+            self.canvas.tag_raise(bloco["borda"])
