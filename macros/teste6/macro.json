@@ -1,0 +1,29 @@
+{
+  "macro_name": null,
+  "blocks": [
+    {
+      "id": 1,
+      "type": "Clique",
+      "params": {
+        "type": "click",
+        "x": 1250,
+        "y": 1414
+      },
+      "x": 274.0,
+      "y": 203.0
+    },
+    {
+      "id": 2,
+      "type": "Se Imagem",
+      "params": {},
+      "x": 85.0,
+      "y": 203.0
+    }
+  ],
+  "connections": [
+    {
+      "from": 2,
+      "to": 1
+    }
+  ]
+}
