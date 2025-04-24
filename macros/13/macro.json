@@ -1,0 +1,57 @@
+{
+  "macro_name": "13",
+  "blocks": [
+    {
+      "id": 2,
+      "type": "Se Imagem",
+      "params": {
+        "type": "imagem",
+        "x": 1120,
+        "y": 439,
+        "w": 257,
+        "h": 141,
+        "imagem": "img\\imagem_20250424_132431_036704.png"
+      },
+      "x": 20,
+      "y": 20
+    },
+    {
+      "id": 3,
+      "type": "OCR",
+      "params": {
+        "type": "ocr",
+        "x": 1278,
+        "y": 641,
+        "w": 164,
+        "h": 82,
+        "text": "teste",
+        "verificar_vazio": false
+      },
+      "x": 120.0,
+      "y": 194.0
+    },
+    {
+      "id": 4,
+      "type": "OCR duplo",
+      "params": {
+        "type": "ocr_duplo",
+        "x1": 1048,
+        "y1": 569,
+        "w1": 122,
+        "h1": 69,
+        "x2": 1057,
+        "y2": 618,
+        "w2": 139,
+        "h2": 81,
+        "text1": "tests",
+        "text2": "testse",
+        "condicao": "and",
+        "vazio1": false,
+        "vazio2": false
+      },
+      "x": 154.0,
+      "y": 309.0
+    }
+  ],
+  "connections": []
+}
