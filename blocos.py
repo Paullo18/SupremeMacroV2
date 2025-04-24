@@ -10,6 +10,7 @@ from gui.janela_label import add_label
 from gui.janela_loop import add_loop
 from gui.janela_ocr import add_ocr
 from gui.janela_ocr_duplo import add_ocr_duplo
+from gui.janela_texto import add_texto
 from core.update_list import update_list
 import threading, time, pyautogui, keyboard
 from tkinter import Toplevel, IntVar, Label, Entry
@@ -222,6 +223,9 @@ class BlocoManager:
         elif lt == "ocr duplo":
             self.canvas.tag_bind(rect, "<Double-Button-1>",
                                  lambda e,b=bloco: self._on_double_click_ocr_duplo(b))
+        elif lt == "texto":
+            self.canvas.tag_bind(rect, "<Double-Button-1>",
+                                 lambda e,b=bloco: self._on_double_click_texto(b))
 
         self.blocks.append(bloco)
         return bloco
@@ -601,6 +605,8 @@ class BlocoManager:
                 elif tipo == "ocr_duplo":
                     cond = acao.get("condicao", "and").upper()
                     txt = f"OCR Duplo: '{acao['text1']}' {cond} '{acao['text2']}'"
+                elif tipo == "text":
+                    txt = f'TXT: "{acao["content"][:18]}…"' if len(acao["content"])>20 else f'TXT: "{acao["content"]}"'
                 else:
                     txt = tipo.upper()
                 novo["label_id"] = self.canvas.create_text(
@@ -794,10 +800,9 @@ class BlocoManager:
     def _recolocar_handles(self, bloco):
 
         coords = self.canvas.coords(bloco["rect"])
-        if len(coords) < 4:          # retângulo sumiu
-            # recria rapidamente e sai
-            cx, cy = bloco["x"], bloco["y"]          # ou onde estiver guardado
-            largura, altura = bloco["w"], bloco["h"]  # se você salva isso
+        if len(coords) < 4:                 # retângulo sumiu
+            cx, cy = bloco["x"], bloco["y"]
+            largura, altura = bloco["width"], bloco["height"]   # ← aqui estava o erro
             bloco["rect"] = self.canvas.create_rectangle(
                 cx, cy, cx + largura, cy + altura,
                 outline="", fill=""
@@ -978,32 +983,39 @@ class BlocoManager:
         Abre a janela de reconhecimento de imagem, grava em bloco['acao']
         e desenha o texto abaixo.
         """
-        # buffer temporário para undo
+        # ── buffer temporário (serve p/ undo) ───────────────────────────────
         bloco["_img_buffer"] = []
+
         def finish():
-            # 1) empilha snapshot ANTES da mudança
+            # 1) snapshot p/ desfazer
             if not self._is_restoring:
                 self._undo_stack.append(self._snapshot())
                 self._redo_stack.clear()
-            # 2) grava a ação e desenha o label
+
+            # 2) grava a última ação confirmada
             ac = bloco["_img_buffer"][-1]
             bloco["acao"] = ac
+
+            # 3) redesenha o label sob o bloco
             if bloco.get("label_id"):
                 self.canvas.delete(bloco["label_id"])
             bx, by = bloco["x"], bloco["y"]
             w, h   = bloco["width"], bloco["height"]
-            # exibe o nome do arquivo + dimensões
             texto = f"Img:{ac['imagem']} @({ac['x']},{ac['y']},{ac['w']},{ac['h']})"
             bloco["label_id"] = self.canvas.create_text(
-                bx + w/2, by + h + 8,
+                bx + w / 2, by + h + 8,
                 text=texto, font=("Arial", 9), fill="black"
             )
-        # chama a janela adaptada
+
+        # ── chama a janela passando a AÇÃO ATUAL como 'initial' ─────────────
+        from gui.janela_imagem import add_imagem
         add_imagem(
-            actions     = bloco["_img_buffer"],
-            update_list = finish,
-            tela        = self.app.root
+            actions      = bloco["_img_buffer"],
+            update_list  = finish,
+            tela         = self.app.root,
+            initial      = bloco.get("acao")  # ← permite pré-visualizar template/área
         )
+
 
     def _on_double_click_label(self, bloco):
         """
@@ -1077,87 +1089,178 @@ class BlocoManager:
             update_list = finish,
             tela        = self.app.root
         )
+    
     def _on_double_click_ocr(self, bloco):
         """
-        Reusa sua janela de OCR para capturar a ação,
-        grava em bloco['acao'] e desenha o texto abaixo.
+        Abre a janela de OCR simples.
+        – Se o bloco já tiver uma ação gravada em bloco['acao'],
+          esses dados são enviados como *initial=* para que a janela
+          abra exibindo a área, o texto esperado e o flag “vazio”.
+        – Ao confirmar, grava a nova ação, push no UNDO e redesenha
+          o rótulo abaixo do bloco.
         """
+        # buffer temporário onde a janela colocará o dict resultante
         bloco["_ocr_buffer"] = []
+
         def finish():
-            ac = bloco["_ocr_buffer"][-1]
-            bloco["acao"] = ac
-            # Apaga label antigo
-            if bloco.get("label_id"):
-                self.canvas.delete(bloco["label_id"])
-            # Desenha novo label abaixo do bloco
-            bx, by = bloco["x"], bloco["y"]
-            w, h = bloco["width"], bloco["height"]
-            texto = f"OCR: '{ac['text']}'"
-            bloco["label_id"] = self.canvas.create_text(
-                bx + w/2, by + h + 8,
-                text=texto, font=("Arial", 9), fill="black"
-            )
-            # Empilha snapshot para poder desfazer
+            """Callback chamado pela janela quando o utilizador pressiona OK."""
+            if not bloco["_ocr_buffer"]:
+                return                      # nada foi alterado
+
+            # 1) empilha snapshot (para Ctrl+Z) **antes** da mudança
             if not self._is_restoring:
                 self._undo_stack.append(self._snapshot())
                 self._redo_stack.clear()
 
-        # Chama sua janela_ocr existente
+            # 2) grava definitivamente a ação
+            ac = bloco["_ocr_buffer"][-1]
+            bloco["acao"] = ac
+
+            # 3) (re)desenha o rótulo de descrição
+            if bloco.get("label_id"):
+                self.canvas.delete(bloco["label_id"])
+
+            texto_esperado = ac.get("text", "")
+            if ac.get("verificar_vazio"):
+                lbl_txt = "OCR: [vazio]"
+            else:
+                lbl_txt = f"OCR: '{texto_esperado}'"
+
+            bx, by = bloco["x"], bloco["y"]
+            w,  h  = bloco["width"], bloco["height"]
+            bloco["label_id"] = self.canvas.create_text(
+                bx + w / 2, by + h + 8,
+                text=lbl_txt, font=("Arial", 9), fill="black"
+            )
+
+        # --- abre a janela passando dados atuais (se existirem) -------------
         add_ocr(
-            actions     = bloco["_ocr_buffer"],
+        actions     = bloco["_ocr_buffer"],   # onde a janela escreve
+        update_list = finish,                 # callback quando OK
+        tela        = self.app.root,
+        listbox     = None,                   # não usamos listbox aqui
+        initial     = bloco.get("acao", {})   # ← modo edição
+        )
+
+
+    def _on_double_click_ocr_duplo(self, bloco):
+        """
+        Abre a janela de OCR Duplo; grava em bloco['acao'] e
+        atualiza o rótulo abaixo do bloco.
+
+        – Se o bloco já possui uma ação gravada, ela é passada em
+          `initial=` para que tudo apareça preenchido (áreas, textos,
+          condição AND/OR e flags de “vazio”).
+        """
+        # buffer temporário para receber o dict vindo da janela
+        bloco["_od_buffer"] = []
+
+        def finish():
+            """Callback disparado pela janela quando o utilizador confirma."""
+            if not bloco["_od_buffer"]:
+                return                      # nada foi alterado
+
+            # 1) empilha snapshot para UNDO, antes da mudança
+            if not self._is_restoring:
+                self._undo_stack.append(self._snapshot())
+                self._redo_stack.clear()
+
+            # 2) grava a ação definitiva
+            ac = bloco["_od_buffer"][-1]
+            bloco["acao"] = ac
+
+            # 3) (re)desenha o rótulo de descrição
+            if bloco.get("label_id"):
+                self.canvas.delete(bloco["label_id"])
+
+            cond = ac.get("condicao", "and").upper()
+            texto = (f"OCR Duplo: '{ac.get('text1', '')}' {cond} "
+                     f"'{ac.get('text2', '')}'")
+
+            bx, by = bloco["x"], bloco["y"]
+            w,  h  = bloco["width"], bloco["height"]
+            bloco["label_id"] = self.canvas.create_text(
+                bx + w / 2, by + h + 8,
+                text=texto, font=("Arial", 9), fill="black"
+            )
+
+        # chama a janela passando os dados já existentes para “modo edição”
+        add_ocr_duplo(
+            actions     = bloco["_od_buffer"],   # onde a janela colocará o dict
+            atualizar   = finish,                # callback ao OK
+            tela        = self.app.root,
+            listbox     = None,                  # não usamos aqui
+            initial     = bloco.get("acao", {})  # <- dados atuais (se houver)
+        )
+
+    def _on_double_click_texto(self, bloco):
+        """
+        Abre a janela de Texto, grava em bloco['acao']
+        e desenha o conteúdo abaixo do bloco.
+        """
+        bloco["_txt_buffer"] = []
+        def finish():
+            # snapshot antes da alteração
+            if not self._is_restoring:
+                self._undo_stack.append(self._snapshot())
+                self._redo_stack.clear()
+            ac = bloco["_txt_buffer"][-1]      # {'type':'text', 'content': '...'}
+            bloco["acao"] = ac
+            # remove label antigo (se existir)
+            if bloco.get("label_id"):
+                self.canvas.delete(bloco["label_id"])
+            # desenha preview do texto abaixo do bloco
+            bx, by = bloco["x"], bloco["y"]
+            w, h   = bloco["width"], bloco["height"]
+            preview = (ac["content"][:18] + "…") if len(ac["content"]) > 20 else ac["content"]
+            bloco["label_id"] = self.canvas.create_text(
+                bx + w/2, by + h + 8,
+                text=f'TXT: "{preview}"',
+                font=("Arial", 9), fill="black"
+            )
+        # chama a janela de texto
+        add_texto(
+            actions     = bloco["_txt_buffer"],
             update_list = finish,
             tela        = self.app.root
         )
 
-    def _on_double_click_ocr_duplo(self, bloco):
-        """
-        Open the OCR Duplo dialog, store the action in bloco['acao'],
-        and draw its summary below the block.
-        """
-        bloco["_od_buffer"] = []
-
-        def finish():
-            # record pre-change snapshot
-            if not self._is_restoring:
-                self._undo_stack.append(self._snapshot())
-                self._redo_stack.clear()
-
-            ac = bloco["_od_buffer"][-1]
-            bloco["acao"] = ac
-            # remove previous label
-            if bloco.get("label_id"):
-                self.canvas.delete(bloco["label_id"])
-
-            # draw summary below
-            bx, by = bloco["x"], bloco["y"]
-            w, h   = bloco["width"], bloco["height"]
-            cond   = ac.get("condicao", "and").upper()
-            texto  = f"OCR Duplo: '{ac['text1']}' {cond} '{ac['text2']}'"
-            bloco["label_id"] = self.canvas.create_text(
-                bx + w/2, by + h + 8,
-                text=texto, font=("Arial", 9), fill="black"
-            )
-
-        # launch your new dialog
-        add_ocr_duplo(
-            actions     = bloco["_od_buffer"],
-            atualizar   = finish,
-            tela        = self.app.root,
-            listbox     = None
-        )
     def _on_canvas_double_click(self, event):
-        """
-        Captura o duplo-clique em qualquer lugar do canvas,
-        verifica se foi num bloco 'Clique' e, se sim, dispara a janela.
-        """
+        # coordenadas do clique no canvas
         x, y = self.canvas.canvasx(event.x), self.canvas.canvasy(event.y)
-        # procura o bloco que contém (x,y)
-        for bloco in self.blocks:
-            x1, y1, x2, y2 = self.canvas.coords(bloco["rect"])
-            if x1 <= x <= x2 and y1 <= y <= y2:
-                # só dispara se for exatamente o bloco "Clique"
-                if bloco["text"].strip().lower() == "clique":
-                    return self._on_double_click(bloco)
-                else:
-                    return  # não é bloco click, ignora
-        # se clicou no canvas vazio, não faz nada
+    
+        # percorre todos os blocos
+        for bloco in list(self.blocks):          # list() p/ permitir remover
+            coords = self.canvas.coords(bloco["rect"])
+    
+            # — proteção contra retângulos já apagados —
+            if len(coords) < 4:
+                # remove o “bloco órfão” da lista interna e segue p/ o próximo
+                self.blocks.remove(bloco)
+                continue
+            
+            x1, y1, x2, y2 = coords
+            if not (x1 <= x <= x2 and y1 <= y <= y2):
+                continue                         # clique não é neste bloco
+            
+            # ---------- achamos o bloco clicado ----------
+            tipo = bloco["text"].strip().lower()
+    
+            mapa = {
+                "clique"     : self._on_double_click,
+                "delay"      : self._on_double_click_delay,
+                "goto"       : self._on_double_click_goto,
+                "se imagem"  : self._on_double_click_imagem,
+                "label"      : self._on_double_click_label,
+                "loop"       : self._on_double_click_loop,
+                "ocr"        : self._on_double_click_ocr,
+                "ocr duplo"  : self._on_double_click_ocr_duplo,
+                "texto"      : self._on_double_click_texto,
+            }
+    
+            if tipo in mapa:
+                return mapa[tipo](bloco)         # abre a janela certa
+            return                               # tipo desconhecido → nada
+    
+        # se nenhum bloco foi clicado, simplesmente não faz nada
+
