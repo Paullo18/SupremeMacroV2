@@ -36,6 +36,40 @@ class FlowchartApp:
         self.top_frame.pack(side="top",   fill="x")
         self.menu_frame.pack(side="left", fill="y")
         self.canvas.pack    (side="right", fill="both", expand=True, padx=6, pady=6)
+        #self.canvas.configure(scrollregion=(0, 0, 5000, 5000))
+
+        # -----------------------------------------------
+        #  ZOOM  +  PAN (arrastar com botão direito)
+        # -----------------------------------------------
+        self._zoom_default = 1.0          # 100 % – é o “padrão de referência”
+        self._zoom_scale   = self._zoom_default
+
+        # roda do mouse  (Windows/Mac)
+        self.canvas.bind("<MouseWheel>", self._on_zoom)
+        # roda do mouse  (Linux X11)
+        self.canvas.bind("<Button-4>",   lambda e: self._on_zoom(e, delta=120))
+        self.canvas.bind("<Button-5>",   lambda e: self._on_zoom(e, delta=-120))
+
+        # arrastar com botão direito (ou botão do meio, se preferir)
+        self.canvas.bind("<ButtonPress-2>", self._start_pan)
+        self.canvas.bind("<B2-Motion>",      self._move_pan)
+
+        # ⇢ atalho Ctrl+0  (Windows / Linux / macOS)
+        self.root.bind_all("<Control-Key-0>", self._reset_zoom)
+
+        # label de status no rodapé
+        self.status_bar = tk.Frame(self.root, bg="#f0f0f0")
+        self.status_bar.pack(side="bottom", fill="x")
+
+        # label de zoom alinhada à ESQUERDA
+        self.status = tk.Label(
+        self.root,
+        text="Zoom: 100 %",
+        bg="#f0f0f0",
+        anchor="w"
+        )
+
+        self.status.place(x=6, rely=1.0, anchor="sw")
 
         # -------- gerenciadores ----------------------------
         self.blocos = BlocoManager(self.canvas, self)
@@ -298,6 +332,121 @@ class FlowchartApp:
         except Exception as exc:
             messagebox.showerror("Erro ao carregar", str(exc))
 
+    # =====================================================
+    #  Zoom
+    # =====================================================
+    # ──  método _on_zoom  (substituir o atual) ─────────────────────────────
+    def _on_zoom(self, event, *, delta=None):
+        d = event.delta if delta is None else delta
+        if d == 0:
+            return
+        
+        # -------- passo fixo de 5 % --------------------------------
+        STEP = 0.05                        # 5 %
+        factor = 1.0 + STEP if d > 0 else 1.0 - STEP
+        # -----------------------------------------------------------
+
+        # aplica limites 10 % – 200 %
+        new_scale = self._zoom_scale * factor
+        if not (0.10 <= new_scale <= 2.00):
+            return
+
+        self._zoom_scale = new_scale
+
+        x = self.canvas.canvasx(event.x)
+        y = self.canvas.canvasy(event.y)
+        self.canvas.scale("all", x, y, factor, factor)
+        self.canvas.configure(scrollregion=self.canvas.bbox("all"))
+        self._rescale_styles()
+        self._update_status()
+
+
+    # =====================================================
+    #  Pan (arraste)
+    # =====================================================
+    def _start_pan(self, event):
+        """Marca ponto inicial para scan_dragto."""
+        self.canvas.scan_mark(event.x, event.y)
+
+    def _move_pan(self, event):
+        """Chama scan_dragto conforme o mouse move."""
+        self.canvas.scan_dragto(event.x, event.y, gain=1)
+    
+    # ---------------------------------------------------------
+    # Ajusta aparência depois que a geometria já foi escalada
+    # ---------------------------------------------------------
+    def _rescale_styles(self):
+        z = self._zoom_scale                 # fator acumulado de zoom
+
+        # ---- A) espessura das setas -----------------------------------
+        for seta_id, _, _ in self.setas.setas:
+            for seg in self.setas._obter_segmentos(seta_id):
+                # tag “w:2” guarda a espessura original
+                tags = self.canvas.gettags(seg)
+                base = next((t for t in tags if t.startswith("w:")), None)
+                if base is None:
+                    self.canvas.addtag_withtag("w:2", seg)
+                    base_width = 2
+                else:
+                    base_width = float(base[2:])
+                self.canvas.itemconfig(
+                    seg, width=max(1, round(base_width * z))
+                )
+
+        # ---- B) fonte dos handles “⊕” ---------------------------------
+        for bloco in self.blocos.blocks:
+            for h in bloco.get("handles", []):
+                tags = self.canvas.gettags(h)
+                base = next((t for t in tags if t.startswith("fs:")), None)
+                if base is None:
+                    self.canvas.addtag_withtag("fs:10", h)
+                    base_fs = 10
+                else:
+                    base_fs = int(base[3:])
+                new_fs = max(6, int(base_fs * z))
+                self.canvas.itemconfig(h, font=("Arial", new_fs, "bold"))
+
+        # ---- C) ícone dos blocos --------------------------------------
+        for bloco in self.blocos.blocks:
+            icon_id = bloco.get("icon")
+            pil_orig = bloco.get("_pil_orig")
+            if not icon_id or pil_orig is None:
+                continue
+
+            # quanto o ícone já está escalado?
+            old_s = bloco.get("_icon_scale", 1.0)
+            new_s = self._zoom_scale
+
+            # se a diferença é menor que 1 %, nem mexe
+            if abs(new_s - old_s) < 0.01:
+                continue
+
+            # gera uma nova bitmap no tamanho certo
+            w = max(8, int(bloco["width"]  * new_s))
+            h = max(8, int(bloco["height"] * new_s))
+            tk_img = ImageTk.PhotoImage(pil_orig.resize((w, h), Image.LANCZOS))
+
+            # troca a imagem no canvas e guarda referências
+            self.canvas.itemconfig(icon_id, image=tk_img)
+            bloco["_icon_ref"]   = tk_img     # evita GC
+            bloco["_icon_scale"] = new_s      # marca a escala atual
+    
+    # ──  método _reset_zoom  (novo) ────────────────────────────────────────
+    def _reset_zoom(self, event=None):
+        if abs(self._zoom_scale - self._zoom_default) < 1e-3:
+            return                                          # já está no padrão
+        factor = self._zoom_default / self._zoom_scale
+        self._zoom_scale = self._zoom_default
+        # centro = canto superior-esquerdo para não “saltar”
+        self.canvas.scale("all", 0, 0, factor, factor)
+        self.canvas.configure(scrollregion=self.canvas.bbox("all"))
+        self._rescale_styles()
+        self._update_status()
+
+    # ──  método _update_status  (novo) ─────────────────────────────────────
+    def _update_status(self):
+        pct = int(round(self._zoom_scale * 100))
+        self.status.config(text=f"{pct} %")
 
 # ============================================================
 # Inicialização
