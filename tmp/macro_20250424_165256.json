@@ -1,0 +1,55 @@
+{
+  "macro_name": null,
+  "blocks": [
+    {
+      "id": 17,
+      "type": "Se Imagem",
+      "params": {
+        "type": "imagem",
+        "x": 1043,
+        "y": 533,
+        "w": 192,
+        "h": 394,
+        "imagem": "imagem_20250424_165240_535884.png"
+      },
+      "x": -12.0,
+      "y": -151.0
+    },
+    {
+      "id": 18,
+      "type": "Clique",
+      "params": {
+        "type": "click",
+        "x": 1256,
+        "y": 1418
+      },
+      "x": 152.0,
+      "y": -243.0
+    },
+    {
+      "id": 19,
+      "type": "Clique",
+      "params": {
+        "type": "click",
+        "x": 1393,
+        "y": 1416
+      },
+      "x": 116.0,
+      "y": -72.0
+    }
+  ],
+  "connections": [
+    {
+      "from": 17,
+      "to": 18,
+      "branch": "true",
+      "color": "green"
+    },
+    {
+      "from": 17,
+      "to": 19,
+      "branch": "false",
+      "color": "red"
+    }
+  ]
+}

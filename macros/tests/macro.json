@@ -1,0 +1,48 @@
+{
+  "macro_name": "tests",
+  "blocks": [
+    {
+      "id": 1,
+      "type": "Clique",
+      "params": {
+        "type": "click",
+        "x": 1237,
+        "y": 1425
+      },
+      "x": 317.0,
+      "y": 56.0
+    },
+    {
+      "id": 2,
+      "type": "Clique",
+      "params": {
+        "type": "click",
+        "x": 1348,
+        "y": 1415
+      },
+      "x": 325.0,
+      "y": 188.0
+    },
+    {
+      "id": 3,
+      "type": "Se Imagem",
+      "params": {},
+      "x": 114.0,
+      "y": 120.0
+    }
+  ],
+  "connections": [
+    {
+      "from": 3,
+      "to": 1,
+      "branch": "true",
+      "color": "green"
+    },
+    {
+      "from": 3,
+      "to": 2,
+      "branch": "false",
+      "color": "red"
+    }
+  ]
+}
