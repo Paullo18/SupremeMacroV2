@@ -503,10 +503,20 @@ class BlocoManager:
             (b["text"], b["x"], b["y"], b.get("acao"))
             for b in self.blocks
         ]
-        estado_setas = [
-            (self.blocks.index(o), self.blocks.index(d))
-            for _, o, d in self.app.setas.setas
-        ]
+        estado_setas = []
+        for seta_id, origem, destino in self.app.setas.setas:
+            # pega a cor original (preferindo o cache do SetaManager)
+            info = self.app.setas._setas_info.get(seta_id)
+            if info and len(info) >= 3:
+                cor = info[2]
+            else:
+                cor = self.app.setas.canvas.itemcget(seta_id, "fill") or "#000"
+
+            estado_setas.append((
+                self.blocks.index(origem),
+                self.blocks.index(destino),
+                cor                     # <── salva a cor!
+            ))
         return (estado_blocos, estado_setas)
 
 
@@ -602,10 +612,12 @@ class BlocoManager:
                 )
 
         # 4) Recria todas as setas entre blocos
-        for idx_o, idx_d in setas_info:
-            origem = self.blocks[idx_o]
+        for idx_o, idx_d, cor in setas_info:
+            origem  = self.blocks[idx_o]
             destino = self.blocks[idx_d]
-            self.app.setas.desenhar_linha(origem, destino)
+            # preserva a cor original
+            self.app.setas.desenhar_linha(origem, destino, cor_override=cor)
+
 
         self._is_restoring = False
 
@@ -780,6 +792,18 @@ class BlocoManager:
                 pass
 
     def _recolocar_handles(self, bloco):
+
+        coords = self.canvas.coords(bloco["rect"])
+        if len(coords) < 4:          # retângulo sumiu
+            # recria rapidamente e sai
+            cx, cy = bloco["x"], bloco["y"]          # ou onde estiver guardado
+            largura, altura = bloco["w"], bloco["h"]  # se você salva isso
+            bloco["rect"] = self.canvas.create_rectangle(
+                cx, cy, cx + largura, cy + altura,
+                outline="", fill=""
+            )
+            return
+        x1, y1, x2, y2 = coords
         """
         Reposiciona os handles de um bloco:
         - Se for IF-block, reposiciona true_handle (verde) e false_handle (vermelho).
