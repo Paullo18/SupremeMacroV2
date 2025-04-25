@@ -309,6 +309,23 @@ class FlowchartApp:
                     elif tipo == "text":
                         conteudo = params.get('content', params.get('text', ''))
                         txt = f"TXT: '{conteudo[:18]}…'" if len(conteudo) > 20 else f"TXT: '{conteudo}'"
+                    elif tipo == "screenshot":
+                        # Desenha rótulo de screenshot
+                        if bloco.get("label_id"): self.canvas.delete(bloco["label_id"])
+                        bx, by = params.get("x",0), params.get("y",0)
+                        w0, h0 = bloco["width"], bloco["height"]
+                        if params.get("mode") == "whole":
+                            texto = "Screenshot: tela inteira"
+                        else:
+                            r = params.get("region", {})
+                            texto = f"Screenshot: reg ({r['x']},{r['y']},{r['w']}×{r['h']})"
+                        bloco["label_id"] = self.canvas.create_text(
+                            bx + w0/2,
+                            by + h0 + 8,
+                            text=texto,
+                            font=("Arial", 9),
+                            fill="black"
+                        )
                     else:
                         txt = tipo.upper()
                     bloco["label_id"] = self.canvas.create_text(

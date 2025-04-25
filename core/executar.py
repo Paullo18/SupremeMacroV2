@@ -9,6 +9,11 @@ import keyboard
 import pyautogui
 import pytesseract
 from PIL import ImageGrab, Image
+import io
+import win32clipboard
+import requests
+from datetime import datetime
+from utils.telegram_util import send_photo
 
 # Caminho do Tesseract (ajuste se necessário)
 pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
@@ -230,7 +235,8 @@ def executar_macro_flow(json_path: str, progress_callback=None, label_callback=N
                     _, max_val, _, _ = cv2.minMaxLoc(res)
                     th = ac.get("threshold", 0.80)
                     resultado = max_val >= th
-
+                
+            
                 # decide próximo bloco com base no resultado
                 ramo = "true" if resultado else "false"
                 destino = next_map[current][ramo]
@@ -240,6 +246,48 @@ def executar_macro_flow(json_path: str, progress_callback=None, label_callback=N
                     destino = destino[0]
                 current = destino
                 continue  # vai para o próximo loop da WHILE
+
+            elif tipo == 'screenshot':
+                # captura da screenshot
+                if ac.get('mode') == 'whole':
+                    img = ImageGrab.grab()
+                else:
+                    r = ac.get('region', {})
+                    img = ImageGrab.grab(bbox=(r['x'], r['y'], r['x']+r['w'], r['y']+r['h']))
+                # destino
+                st = ac.get('save_to')
+                if st == 'disk':
+                    base = ac.get('custom_path') if ac.get('path_mode') == 'custom' else os.getcwd()
+                    fname = f"screenshot_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png"
+                    print(f"[DEBUG] Salvando screenshot em {os.path.join(base, fname)}")
+                    img.save(os.path.join(base, fname))
+                elif st == 'clipboard':
+                    buf = io.BytesIO()
+                    img.convert('RGB').save(buf, 'BMP')
+                    data = buf.getvalue()[14:]
+                    buf.close()
+                    win32clipboard.OpenClipboard()
+                    win32clipboard.EmptyClipboard()
+                    win32clipboard.SetClipboardData(win32clipboard.CF_DIB, data)
+                    win32clipboard.CloseClipboard()
+                elif st == 'telegram':
+                    # salva temporariamente no disco
+                    base = ac.get('custom_path') if ac.get('path_mode')=='custom' else os.getcwd()
+                    fname = f"screenshot_{datetime.now():%Y%m%d_%H%M%S}.png"
+                    full_path = os.path.join(base, fname)
+                    img.save(full_path)
+
+                    # envia via Telegram
+                    send_photo(
+                        bot_token = ac['token'],
+                        chat_id  = ac['chat_id'],
+                        photo_path = full_path,
+                        caption = ac.get('custom_message', '')
+                    )
+                # segue para próximo bloco
+                default_outs = next_map[current]['default']
+                current = default_outs[0] if default_outs else None
+                continue
 
             # (outros tipos como loopstart/loopend/goto/label
             #  podem ser implementados usando next_map)
