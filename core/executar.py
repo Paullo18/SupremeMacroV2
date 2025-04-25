@@ -15,6 +15,11 @@ import requests
 from datetime import datetime
 from utils.telegram_util import send_photo
 
+_grab_lock      = threading.Lock()  # para ImageGrab / screenshot
+_tess_lock      = threading.Lock()  # para pytesseract
+_clipboard_lock = threading.Lock()  # para win32clipboard
+_io_lock        = threading.Lock()  # para salvar em disco
+
 # Caminho do Tesseract (ajuste se necessário)
 pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
 
@@ -100,6 +105,9 @@ def load_macro_flow(json_path: str):
 # -----------------------------------------------------------
 
 def executar_macro_flow(json_path: str, progress_callback=None, label_callback=None):
+    blocks, next_map, start = load_macro_flow(json_path)
+    # dispara o “branch” inicial na thread principal
+    _run_branch(blocks, next_map, start, progress_callback, label_callback)
     """Executa a macro salva em *json_path*.
 
     * ``progress_callback(step:int, total:int)`` — opcional, recebe o
@@ -116,188 +124,234 @@ def executar_macro_flow(json_path: str, progress_callback=None, label_callback=N
     total = len(blocks)
     step = 0
 
-    while current is not None:
-        if macro_parar:
-            print("Macro interrompida pelo usuário (Ctrl+Q).")
-            break
-        while macro_pausar:
-            time.sleep(0.1)
+    def _run_branch(blocks, next_map, start_block, progress_callback, label_callback):
+        current = start_block
+        while current is not None:
+            bloco = blocks[current]
+            ac    = bloco.get("params", {})
+            tipo  = ac.get("type", "").lower()
 
-        step += 1
-        if progress_callback:
-            progress_callback(step, total)
-        if label_callback:
-            label_callback(f"Executando bloco {current}")
+            if tipo == "fork":
+                branches = ac.get("branches", [])     # ex: ["blocA", "blocB", ...]
+                join_id  = ac.get("join_after", None)  # ex: bloco onde se unem
 
-        bloco = blocks[current]
-        ac = bloco.get("params", {})   # params gravado no JSON
-        tipo = str(ac.get("type", "")).lower()
+                threads = []
+                for bid in branches:
+                    t = threading.Thread(
+                        target=_run_branch,
+                        args=(blocks, next_map, bid, progress_callback, label_callback),
+                        daemon=True
+                    )
+                    t.start()
+                    threads.append(t)
 
-        try:
-            # -------- AÇÕES BÁSICAS ----------------------------------
-            if tipo == "click":
-                pyautogui.click(ac["x"], ac["y"])
-
-            elif tipo in ("type", "text"):
-                texto = ac.get("text") or ac.get("content", "")
-                pyautogui.write(texto)
-
-            elif tipo == "delay":
-                time.sleep(ac.get("time", 0) / 1000)
-
-            # -------- CONDICIONAIS ----------------------------------
-            elif tipo in ("ocr", "ocr_duplo", "imagem"):
-                resultado = False
-
-                if tipo == "ocr":
-                    # ------------ OCR simples -------------
-                    bbox = (ac["x"], ac["y"],
-                            ac["x"] + ac["w"], ac["y"] + ac["h"])
-                    img = ImageGrab.grab(bbox=bbox)
-                    detectado = pytesseract.image_to_string(img).strip().lower()
-
-                    esperado   = ac.get("text", "").strip().lower()
-                    if ac.get("vazio"):
-                        resultado = detectado == ""
-                    else:
-                        resultado = esperado in detectado
-
-                elif tipo == "ocr_duplo":
-                    # ------------ OCR duplo ---------------
-                    def _lê(bx, by, bw, bh):
-                        img = ImageGrab.grab(bbox=(bx, by, bx+bw, by+bh))
-                        return pytesseract.image_to_string(img).strip().lower()
-
-                    t1 = _lê(ac["x1"], ac["y1"], ac["w1"], ac["h1"])
-                    t2 = _lê(ac["x2"], ac["y2"], ac["w2"], ac["h2"])
-
-                    if ac.get("vazio1"):
-                        ok1 = t1 == ""
-                    else:
-                        ok1 = ac["text1"].strip().lower() in t1
-
-                    if ac.get("vazio2"):
-                        ok2 = t2 == ""
-                    else:
-                        ok2 = ac["text2"].strip().lower() in t2
-
-                    cond = ac.get("condicao", "and").lower()
-                    resultado = (ok1 and ok2) if cond == "and" else (ok1 or ok2)
-
-                elif tipo == "imagem":
-                    # ------------ Matching de imagem -----------------
-                    # 1) nome vindo do JSON (pode ser só o nome, um path
-                    #    relativo tipo "img/…" ou já absoluto)
-                    raw = ac["imagem"]
-
-                    # 2) lista de lugares onde procurar, em ordem
-                    candidatos = []
-
-                    # 2.1) se veio absoluto, testa primeiro
-                    if os.path.isabs(raw):
-                        candidatos.append(raw)
-
-                    # 2.2) relativo à pasta do JSON (tmp\ ou Macros\<nome>\)
-                    candidatos.append(os.path.join(os.path.dirname(json_path), raw))
-
-                    # 2.3) dentro de Macros\<macro>\img\arquivo
-                    try:
-                        with open(json_path, "r", encoding="utf-8") as f:
-                            macro_name = json.load(f).get("macro_name")
-                        if macro_name:
-                            candidatos.append(os.path.join("Macros", macro_name,
-                                                           "img", os.path.basename(raw)))
-                    except Exception:
-                        pass  # se não conseguir abrir, segue adiante
-
-                    # 3) pega o primeiro que existir
-                    for tpl in candidatos:
-                        if os.path.isfile(tpl):
-                            break
-                    else:
-                        raise FileNotFoundError(f"Template não encontrado em: {candidatos}")
-
-                    # ------------ Faz o match ------------------------
-
-
-                    # área de busca (se veio do diálogo) ou tela inteira
-                    if all(k in ac for k in ("x", "y", "w", "h")) and ac["w"] > 0 and ac["h"] > 0:
+                # Se quiser esperar antes de seguir
+                if join_id:
+                    for t in threads:
+                        t.join()
+                    # após join, continua no bloco de convergência
+                    current = join_id
+                    continue
+                else:
+                    # sem join, esse branch termina aqui
+                    return
+            
+            if macro_parar:
+                print("Macro interrompida pelo usuário (Ctrl+Q).")
+                break
+            while macro_pausar:
+                time.sleep(0.1)
+    
+            step += 1
+            if progress_callback:
+                progress_callback(step, total)
+            if label_callback:
+                label_callback(f"Executando bloco {current}")
+    
+            bloco = blocks[current]
+            ac = bloco.get("params", {})   # params gravado no JSON
+            tipo = str(ac.get("type", "")).lower()
+    
+            try:
+                # -------- AÇÕES BÁSICAS ----------------------------------
+                if tipo == "click":
+                    pyautogui.click(ac["x"], ac["y"])
+    
+                elif tipo in ("type", "text"):
+                    texto = ac.get("text") or ac.get("content", "")
+                    pyautogui.write(texto)
+    
+                elif tipo == "delay":
+                    time.sleep(ac.get("time", 0) / 1000)
+    
+                # -------- CONDICIONAIS ----------------------------------
+                elif tipo in ("ocr", "ocr_duplo", "imagem"):
+                    resultado = False
+    
+                    if tipo == "ocr":
+                        # ------------ OCR simples -------------
                         bbox = (ac["x"], ac["y"],
                                 ac["x"] + ac["w"], ac["y"] + ac["h"])
-                        base = ImageGrab.grab(bbox=bbox)
-                    else:
-                        base = pyautogui.screenshot()
-
-                    base = cv2.cvtColor(np.array(base), cv2.COLOR_RGB2BGR)
-                    templ = cv2.imread(tpl, cv2.IMREAD_COLOR)
-
-                    res = cv2.matchTemplate(base, templ, cv2.TM_CCOEFF_NORMED)
-                    _, max_val, _, _ = cv2.minMaxLoc(res)
-                    th = ac.get("threshold", 0.80)
-                    resultado = max_val >= th
+                        img = safe_grab(bbox=bbox)
+                        detectado = safe_ocr(img).strip().lower()
+    
+                        esperado   = ac.get("text", "").strip().lower()
+                        if ac.get("vazio"):
+                            resultado = detectado == ""
+                        else:
+                            resultado = esperado in detectado
+    
+                    elif tipo == "ocr_duplo":
+                        # ------------ OCR duplo ---------------
+                        def _lê(bx, by, bw, bh):
+                            img = safe_grab(bbox=(bx, by, bx+bw, by+bh))
+                            return safe_ocr(img).strip().lower()
+    
+                        t1 = _lê(ac["x1"], ac["y1"], ac["w1"], ac["h1"])
+                        t2 = _lê(ac["x2"], ac["y2"], ac["w2"], ac["h2"])
+    
+                        if ac.get("vazio1"):
+                            ok1 = t1 == ""
+                        else:
+                            ok1 = ac["text1"].strip().lower() in t1
+    
+                        if ac.get("vazio2"):
+                            ok2 = t2 == ""
+                        else:
+                            ok2 = ac["text2"].strip().lower() in t2
+    
+                        cond = ac.get("condicao", "and").lower()
+                        resultado = (ok1 and ok2) if cond == "and" else (ok1 or ok2)
+    
+                    elif tipo == "imagem":
+                        # ------------ Matching de imagem -----------------
+                        # 1) nome vindo do JSON (pode ser só o nome, um path
+                        #    relativo tipo "img/…" ou já absoluto)
+                        raw = ac["imagem"]
+    
+                        # 2) lista de lugares onde procurar, em ordem
+                        candidatos = []
+    
+                        # 2.1) se veio absoluto, testa primeiro
+                        if os.path.isabs(raw):
+                            candidatos.append(raw)
+    
+                        # 2.2) relativo à pasta do JSON (tmp\ ou Macros\<nome>\)
+                        candidatos.append(os.path.join(os.path.dirname(json_path), raw))
+    
+                        # 2.3) dentro de Macros\<macro>\img\arquivo
+                        try:
+                            with open(json_path, "r", encoding="utf-8") as f:
+                                macro_name = json.load(f).get("macro_name")
+                            if macro_name:
+                                candidatos.append(os.path.join("Macros", macro_name,
+                                                               "img", os.path.basename(raw)))
+                        except Exception:
+                            pass  # se não conseguir abrir, segue adiante
+                        
+                        # 3) pega o primeiro que existir
+                        for tpl in candidatos:
+                            if os.path.isfile(tpl):
+                                break
+                        else:
+                            raise FileNotFoundError(f"Template não encontrado em: {candidatos}")
+    
+                        # ------------ Faz o match ------------------------
+    
+    
+                        # área de busca (se veio do diálogo) ou tela inteira
+                        if all(k in ac for k in ("x", "y", "w", "h")) and ac["w"] > 0 and ac["h"] > 0:
+                            bbox = (ac["x"], ac["y"],
+                                    ac["x"] + ac["w"], ac["y"] + ac["h"])
+                            base = safe_grab(bbox=bbox)
+                        else:
+                            base = pyautogui.screenshot()
+    
+                        base = cv2.cvtColor(np.array(base), cv2.COLOR_RGB2BGR)
+                        templ = cv2.imread(tpl, cv2.IMREAD_COLOR)
+    
+                        res = cv2.matchTemplate(base, templ, cv2.TM_CCOEFF_NORMED)
+                        _, max_val, _, _ = cv2.minMaxLoc(res)
+                        th = ac.get("threshold", 0.80)
+                        resultado = max_val >= th
+                    
                 
-            
-                # decide próximo bloco com base no resultado
-                ramo = "true" if resultado else "false"
-                destino = next_map[current][ramo]
-                if destino is None:
-                    # fallback → primeira saída default (se existir)
-                    destino = next_map[current]["default"][:1] or [None]
-                    destino = destino[0]
-                current = destino
-                continue  # vai para o próximo loop da WHILE
+                    # decide próximo bloco com base no resultado
+                    ramo = "true" if resultado else "false"
+                    destino = next_map[current][ramo]
+                    if destino is None:
+                        # fallback → primeira saída default (se existir)
+                        destino = next_map[current]["default"][:1] or [None]
+                        destino = destino[0]
+                    current = destino
+                    continue  # vai para o próximo loop da WHILE
+                
+                elif tipo == 'screenshot':
+                    # captura da screenshot
+                    if ac.get('mode') == 'whole':
+                        img = safe_grab()
+                    else:
+                        r = ac.get('region', {})
+                        img = safe_grab(bbox=(r['x'], r['y'], r['x']+r['w'], r['y']+r['h']))
+                    # destino
+                    st = ac.get('save_to')
+                    if st == 'disk':
+                        base = ac.get('custom_path') if ac.get('path_mode') == 'custom' else os.getcwd()
+                        fname = f"screenshot_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png"
+                        print(f"[DEBUG] Salvando screenshot em {os.path.join(base, fname)}")
+                        safe_save(os.path.join(base, fname))
+                    elif st == 'clipboard':
+                        buf = io.BytesIO()
+                        img.convert('RGB').save(buf, 'BMP')
+                        data = buf.getvalue()[14:]
+                        buf.close()
+                        safe_clipboard_set(data)
+                    elif st == 'telegram':
+                        # salva temporariamente no disco
+                        base = ac.get('custom_path') if ac.get('path_mode')=='custom' else os.getcwd()
+                        fname = f"screenshot_{datetime.now():%Y%m%d_%H%M%S}.png"
+                        full_path = os.path.join(base, fname)
+                        safe_save(full_path)
+    
+                        # envia via Telegram
+                        send_photo(
+                            bot_token = ac['token'],
+                            chat_id  = ac['chat_id'],
+                            photo_path = full_path,
+                            caption = ac.get('custom_message', '')
+                        )
+                    # segue para próximo bloco
+                    default_outs = next_map[current]['default']
+                    current = default_outs[0] if default_outs else None
+                    continue
+                
+                # (outros tipos como loopstart/loopend/goto/label
+                #  podem ser implementados usando next_map)
+    
+            except Exception as exc:
+                print(f"Erro no bloco {current}: {exc}")
+                traceback.print_exc()
+    
+            # -------- fluxo normal --------------------------------------
+            default_outs = next_map[current]["default"]
+            current = default_outs[0] if default_outs else None
 
-            elif tipo == 'screenshot':
-                # captura da screenshot
-                if ac.get('mode') == 'whole':
-                    img = ImageGrab.grab()
-                else:
-                    r = ac.get('region', {})
-                    img = ImageGrab.grab(bbox=(r['x'], r['y'], r['x']+r['w'], r['y']+r['h']))
-                # destino
-                st = ac.get('save_to')
-                if st == 'disk':
-                    base = ac.get('custom_path') if ac.get('path_mode') == 'custom' else os.getcwd()
-                    fname = f"screenshot_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png"
-                    print(f"[DEBUG] Salvando screenshot em {os.path.join(base, fname)}")
-                    img.save(os.path.join(base, fname))
-                elif st == 'clipboard':
-                    buf = io.BytesIO()
-                    img.convert('RGB').save(buf, 'BMP')
-                    data = buf.getvalue()[14:]
-                    buf.close()
-                    win32clipboard.OpenClipboard()
-                    win32clipboard.EmptyClipboard()
-                    win32clipboard.SetClipboardData(win32clipboard.CF_DIB, data)
-                    win32clipboard.CloseClipboard()
-                elif st == 'telegram':
-                    # salva temporariamente no disco
-                    base = ac.get('custom_path') if ac.get('path_mode')=='custom' else os.getcwd()
-                    fname = f"screenshot_{datetime.now():%Y%m%d_%H%M%S}.png"
-                    full_path = os.path.join(base, fname)
-                    img.save(full_path)
+    def safe_grab(bbox=None):
+        with _grab_lock:
+            return ImageGrab.grab(bbox=bbox)
 
-                    # envia via Telegram
-                    send_photo(
-                        bot_token = ac['token'],
-                        chat_id  = ac['chat_id'],
-                        photo_path = full_path,
-                        caption = ac.get('custom_message', '')
-                    )
-                # segue para próximo bloco
-                default_outs = next_map[current]['default']
-                current = default_outs[0] if default_outs else None
-                continue
+    def safe_ocr(img):
+        with _tess_lock:
+            return pytesseract.image_to_string(img)
 
-            # (outros tipos como loopstart/loopend/goto/label
-            #  podem ser implementados usando next_map)
+    def safe_save(img, path):
+        with _io_lock:
+            img.save(path)
 
-        except Exception as exc:
-            print(f"Erro no bloco {current}: {exc}")
-            traceback.print_exc()
-
-        # -------- fluxo normal --------------------------------------
-        default_outs = next_map[current]["default"]
-        current = default_outs[0] if default_outs else None
-
+    def safe_clipboard_set(data_bytes):
+        with _clipboard_lock:
+            win32clipboard.OpenClipboard()
+            win32clipboard.EmptyClipboard()
+            win32clipboard.SetClipboardData(win32clipboard.CF_DIB, data_bytes)
+            win32clipboard.CloseClipboard()
     print("Execução da macro concluída.")
