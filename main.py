@@ -20,7 +20,7 @@ def macro_em_pasta_macros(path_):
 class FlowchartApp:
     def __init__(self, root):
         self.root = root
-        self.root.title("Flowchart Macro Editor")
+        self.root.title("TraderAutoSuite v0.4")
         # ---------------- layout da janela -----------------
         largura_janela, altura_janela = 1400, 700
         largura_tela  = root.winfo_screenwidth()
@@ -115,6 +115,7 @@ class FlowchartApp:
             ("OCR",        "ocr_icon.png"),
             ("OCR duplo",  "doubleocr_icon.png"),
             ("Loop",       "loop_icon.png"),
+            ("Screenshot", "screenshot_icon.png"),
         ]
         for nome, arquivo in botoes_icone:
             caminho = os.path.join("icons", arquivo)
