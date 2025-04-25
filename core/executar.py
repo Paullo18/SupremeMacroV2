@@ -13,6 +13,7 @@ import io
 import win32clipboard
 import requests
 from datetime import datetime
+from utils.telegram_util import send_photo
 
 # Caminho do Tesseract (ajuste se necessário)
 pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
@@ -270,16 +271,19 @@ def executar_macro_flow(json_path: str, progress_callback=None, label_callback=N
                     win32clipboard.SetClipboardData(win32clipboard.CF_DIB, data)
                     win32clipboard.CloseClipboard()
                 elif st == 'telegram':
-                    buf = io.BytesIO()
-                    img.save(buf, 'PNG')
-                    buf.seek(0)
-                    payload = {
-                        'chat_id': ac['chat_id'],
-                        'caption': ac.get('custom_message', '')
-                    }
-                    files = {'photo': ('screenshot.png', buf, 'image/png')}
-                    url = f"https://api.telegram.org/bot{ac['token']}/sendPhoto"
-                    requests.post(url, data=payload, files=files)
+                    # salva temporariamente no disco
+                    base = ac.get('custom_path') if ac.get('path_mode')=='custom' else os.getcwd()
+                    fname = f"screenshot_{datetime.now():%Y%m%d_%H%M%S}.png"
+                    full_path = os.path.join(base, fname)
+                    img.save(full_path)
+
+                    # envia via Telegram
+                    send_photo(
+                        bot_token = ac['token'],
+                        chat_id  = ac['chat_id'],
+                        photo_path = full_path,
+                        caption = ac.get('custom_message', '')
+                    )
                 # segue para próximo bloco
                 default_outs = next_map[current]['default']
                 current = default_outs[0] if default_outs else None
