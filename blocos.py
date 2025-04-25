@@ -11,6 +11,7 @@ from gui.janela_loop import add_loop
 from gui.janela_ocr import add_ocr
 from gui.janela_ocr_duplo import add_ocr_duplo
 from gui.janela_texto import add_texto
+from gui.screenshot_janela import add_screenshot
 from core.update_list import update_list
 import threading, time, pyautogui, keyboard
 from tkinter import Toplevel, IntVar, Label, Entry
@@ -250,6 +251,9 @@ class BlocoManager:
         elif lt == "texto":
             self.canvas.tag_bind(rect, "<Double-Button-1>",
                                  lambda e,b=bloco: self._on_double_click_texto(b))
+        elif lt == "screenshot":
+            self.canvas.tag_bind(rect, "<Double-Button-1>",
+                                 lambda e,b=bloco: self._on_double_click_screenshot(b))
 
         # --------------------------------------------------
         # 9) finaliza
@@ -292,6 +296,7 @@ class BlocoManager:
             "ocr duplo": "doubleocr_icon.png",
             "se imagem": "ifimage_icon.png",
             "loop": "loop_icon.png",
+            "screenshot":   "screenshot_icon.png",
             "fim loop": "endloop_icon.png",
             "sair loop": "exit_loop.png",
             "fim se": "endif_icon.png",
@@ -1256,6 +1261,56 @@ class BlocoManager:
             update_list = finish,
             tela        = self.app.root
         )
+    
+    def _on_double_click_screenshot(self, bloco):
+        """
+        Abre a janela de configuração de screenshot, grava em bloco['acao']
+        e redesenha o label abaixo do bloco.
+        """
+        # 1) buffer temporário para undo
+        bloco["_screenshot_buffer"] = []
+
+        def finish():
+            # snapshot p/ undo
+            if not self._is_restoring:
+                self._undo_stack.append(self._snapshot())
+                self._redo_stack.clear()
+
+            # pega a última ação confirmada
+            ac = bloco["_screenshot_buffer"][-1]
+            bloco["acao"] = ac
+
+            # apaga label antigo, se houver
+            if bloco.get("label_id"):
+                self.canvas.delete(bloco["label_id"])
+
+            # formata texto
+            if ac["mode"] == "whole":
+                txt = "Screenshot: tela inteira"
+            else:
+                x,y,w,h = ac["region"].values()
+                txt = f"Screenshot: reg ({x},{y},{w}×{h})"
+
+            # desenha o texto
+            bx, by   = bloco["x"], bloco["y"]
+            bw, bh   = bloco["width"], bloco["height"]
+            bloco["label_id"] = self.canvas.create_text(
+                bx + bw/2,
+                by + bh + 8,
+                text=txt,
+                font=("Arial", 9),
+                fill="black"
+            )
+
+        # 2) chama a janela passando o buffer e o callback
+        add_screenshot(
+            actions     = bloco["_screenshot_buffer"],
+            update_list = finish,
+            tela        = self.app.root,
+            initial     = bloco.get("acao", {})  # pré-preenche se já existia
+        )
+
+
 
     def _on_canvas_double_click(self, event):
         # coordenadas do clique no canvas
@@ -1288,6 +1343,7 @@ class BlocoManager:
                 "ocr"        : self._on_double_click_ocr,
                 "ocr duplo"  : self._on_double_click_ocr_duplo,
                 "texto"      : self._on_double_click_texto,
+                "screenshot" : self._on_double_click_screenshot,
             }
     
             if tipo in mapa:
