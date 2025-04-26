@@ -127,7 +127,7 @@ def salvar_macro_gui():
     2. Caso contrário, pergunta o nome da macro (se ainda não houver) e
        move o JSON + imagens para a pasta `Macros/<nome>/`.
     """
-    global caminho_arquivo_tmp
+    global caminho_arquivo_tmp, caminho_macro_real
 
     # ---------------- caso 1: já é uma macro existente ----------------
     if caminho_arquivo_tmp and macro_em_pasta_macros(caminho_arquivo_tmp):
