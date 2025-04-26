@@ -1,0 +1,364 @@
+{
+  "macro_name": "TesteMexc",
+  "blocks": [
+    {
+      "id": 89,
+      "type": "Label",
+      "params": {
+        "type": "label",
+        "name": "CheckSignal"
+      },
+      "x": 34.0,
+      "y": 154.0
+    },
+    {
+      "id": 90,
+      "type": "Clique",
+      "params": {
+        "type": "click",
+        "x": 2084,
+        "y": 705
+      },
+      "x": 319.0,
+      "y": 154.0
+    },
+    {
+      "id": 91,
+      "type": "Texto",
+      "params": {
+        "type": "text",
+        "content": "Open"
+      },
+      "x": 483.0,
+      "y": 154.0
+    },
+    {
+      "id": 92,
+      "type": "Clique",
+      "params": {
+        "type": "click",
+        "x": 1236,
+        "y": 1420
+      },
+      "x": 784.0,
+      "y": 102.0
+    },
+    {
+      "id": 93,
+      "type": "Clique",
+      "params": {
+        "type": "click",
+        "x": 1345,
+        "y": 1417
+      },
+      "x": 784.0,
+      "y": 197.0
+    },
+    {
+      "id": 94,
+      "type": "Label",
+      "params": {
+        "type": "label",
+        "name": "Close"
+      },
+      "x": 766.0,
+      "y": 517.0
+    },
+    {
+      "id": 95,
+      "type": "Clique",
+      "params": {
+        "type": "click",
+        "x": 3101,
+        "y": 1412
+      },
+      "x": 524.0,
+      "y": 397.0
+    },
+    {
+      "id": 96,
+      "type": "Delay",
+      "params": {
+        "type": "delay",
+        "time": 1000
+      },
+      "x": 366.0,
+      "y": 398.0
+    },
+    {
+      "id": 97,
+      "type": "Clique",
+      "params": {
+        "type": "click",
+        "x": 3110,
+        "y": 1420
+      },
+      "x": 200.0,
+      "y": 398.0
+    },
+    {
+      "id": 98,
+      "type": "GoTo",
+      "params": {
+        "type": "goto",
+        "label": "CheckSignal"
+      },
+      "x": 34.0,
+      "y": 398.0
+    },
+    {
+      "id": 99,
+      "type": "GoTo",
+      "params": {
+        "type": "goto",
+        "label": "Close"
+      },
+      "x": 997.0,
+      "y": 398.0
+    },
+    {
+      "id": 100,
+      "type": "OCR",
+      "params": {
+        "type": "ocr",
+        "x": 2031,
+        "y": 393,
+        "w": 81,
+        "h": 46,
+        "text": "Long",
+        "verificar_vazio": false
+      },
+      "x": 629.0,
+      "y": 154.0
+    },
+    {
+      "id": 101,
+      "type": "OCR",
+      "params": {
+        "type": "ocr",
+        "x": 2023,
+        "y": 337,
+        "w": 84,
+        "h": 49,
+        "text": "Open",
+        "verificar_vazio": false
+      },
+      "x": 177.0,
+      "y": 154.0
+    },
+    {
+      "id": 102,
+      "type": "Screenshot",
+      "params": {
+        "type": "screenshot",
+        "mode": "region",
+        "region": {
+          "x": 758,
+          "y": 344,
+          "w": 122,
+          "h": 55
+        },
+        "save_to": "disk",
+        "path_mode": "custom",
+        "custom_path": "C:/Users/menic/OneDrive/Documentos/vscode/Projects/SupremeMacroV2/macros/TestThread",
+        "token": "",
+        "chat_id": "",
+        "custom_message_enabled": false,
+        "custom_message": ""
+      },
+      "x": 992.0,
+      "y": 49.0
+    },
+    {
+      "id": 103,
+      "type": "OCR duplo",
+      "params": {
+        "type": "ocr_duplo",
+        "x1": 2015,
+        "y1": 336,
+        "w1": 181,
+        "h1": 54,
+        "x2": 2027,
+        "y2": 343,
+        "w2": 168,
+        "h2": 42,
+        "text1": "Close Short",
+        "text2": "Close Long",
+        "condicao": "or",
+        "vazio1": false,
+        "vazio2": false
+      },
+      "x": 766.0,
+      "y": 398.0
+    },
+    {
+      "id": 104,
+      "type": "Delay",
+      "params": {
+        "type": "delay",
+        "time": 1000
+      },
+      "x": 992.0,
+      "y": 147.0
+    },
+    {
+      "id": 105,
+      "type": "Screenshot",
+      "params": {
+        "type": "screenshot",
+        "mode": "region",
+        "region": {
+          "x": 2002,
+          "y": 313,
+          "w": 208,
+          "h": 83
+        },
+        "save_to": "disk",
+        "path_mode": "custom",
+        "custom_path": "C:/Users/menic/OneDrive/Documentos/vscode/Projects/SupremeMacroV2/macros/TestThread",
+        "token": "",
+        "chat_id": "",
+        "custom_message_enabled": false,
+        "custom_message": ""
+      },
+      "x": 766.0,
+      "y": 298.0
+    },
+    {
+      "id": 106,
+      "type": "GoTo",
+      "params": {
+        "type": "goto",
+        "label": "CheckSignal"
+      },
+      "x": 177.0,
+      "y": 268.0
+    },
+    {
+      "id": 107,
+      "type": "GoTo",
+      "params": {
+        "type": "goto",
+        "label": "Close"
+      },
+      "x": 992.0,
+      "y": 247.0
+    }
+  ],
+  "connections": [
+    {
+      "from": 95,
+      "to": 96,
+      "branch": null,
+      "color": "#000"
+    },
+    {
+      "from": 96,
+      "to": 97,
+      "branch": null,
+      "color": "#000"
+    },
+    {
+      "from": 97,
+      "to": 98,
+      "branch": null,
+      "color": "#000"
+    },
+    {
+      "from": 100,
+      "to": 92,
+      "branch": "true",
+      "color": "green"
+    },
+    {
+      "from": 100,
+      "to": 93,
+      "branch": "false",
+      "color": "red"
+    },
+    {
+      "from": 91,
+      "to": 100,
+      "branch": null,
+      "color": "#000"
+    },
+    {
+      "from": 101,
+      "to": 90,
+      "branch": "true",
+      "color": "green"
+    },
+    {
+      "from": 89,
+      "to": 101,
+      "branch": null,
+      "color": "#000"
+    },
+    {
+      "from": 103,
+      "to": 95,
+      "branch": "true",
+      "color": "green"
+    },
+    {
+      "from": 103,
+      "to": 99,
+      "branch": "false",
+      "color": "red"
+    },
+    {
+      "from": 94,
+      "to": 103,
+      "branch": null,
+      "color": "#000"
+    },
+    {
+      "from": 92,
+      "to": 104,
+      "branch": null,
+      "color": "#000"
+    },
+    {
+      "from": 104,
+      "to": 102,
+      "branch": null,
+      "color": "#000"
+    },
+    {
+      "from": 103,
+      "to": 105,
+      "branch": "true",
+      "color": "green"
+    },
+    {
+      "from": 101,
+      "to": 106,
+      "branch": "false",
+      "color": "red"
+    },
+    {
+      "from": 92,
+      "to": 107,
+      "branch": null,
+      "color": "#000"
+    },
+    {
+      "from": 93,
+      "to": 107,
+      "branch": null,
+      "color": "#000"
+    },
+    {
+      "from": 90,
+      "to": 91,
+      "branch": null,
+      "color": "#000"
+    },
+    {
+      "from": 93,
+      "to": 104,
+      "branch": null,
+      "color": "#000"
+    }
+  ]
+}
