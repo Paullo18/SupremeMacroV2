@@ -15,6 +15,11 @@ import requests
 from datetime import datetime
 from utils.telegram_util import send_photo
 
+_grab_lock      = threading.Lock()  # para ImageGrab / screenshot
+_tess_lock      = threading.Lock()  # para pytesseract
+_clipboard_lock = threading.Lock()  # para win32clipboard
+_io_lock        = threading.Lock()  # para salvar em disco
+
 # Caminho do Tesseract (ajuste se necessário)
 pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
 
@@ -99,24 +104,33 @@ def load_macro_flow(json_path: str):
 # Executor principal
 # -----------------------------------------------------------
 
-def executar_macro_flow(json_path: str, progress_callback=None, label_callback=None):
-    """Executa a macro salva em *json_path*.
-
-    * ``progress_callback(step:int, total:int)`` — opcional, recebe o
-      progresso (1-based).
-    * ``label_callback(text:str)`` — opcional, recebe descrição para a UI.
-    """
-    global macro_parar, macro_pausar
-    macro_parar = False
-    macro_pausar = False
-
-    threading.Thread(target=_monitorar_teclas, daemon=True).start()
-
-    blocks, next_map, current = load_macro_flow(json_path)
-    total = len(blocks)
+def _run_branch(blocks, next_map, json_path, start_block, progress_callback, label_callback):
     step = 0
-
+    total = len(blocks)
+    current = start_block
     while current is not None:
+        bloco = blocks[current]
+        ac = bloco.get("params", {})
+        tipo = ac.get("type", "").lower()
+
+        # ① apenas forks implícitos de DEFAULT (não interferir em true/false)
+        default_outs = next_map[current]["default"]
+        if len(default_outs) > 1:
+            threads = []
+            for dst in default_outs:
+                t = threading.Thread(
+                    target=_run_branch,
+                    args=(blocks, next_map, json_path, dst, progress_callback, label_callback),
+                    daemon=True
+                )
+                t.start()
+                threads.append(t)
+            # opcional: esperar todos antes de continuar
+            for t in threads:
+                t.join()
+            return
+            
+        
         if macro_parar:
             print("Macro interrompida pelo usuário (Ctrl+Q).")
             break
@@ -129,9 +143,9 @@ def executar_macro_flow(json_path: str, progress_callback=None, label_callback=N
         if label_callback:
             label_callback(f"Executando bloco {current}")
 
-        bloco = blocks[current]
-        ac = bloco.get("params", {})   # params gravado no JSON
-        tipo = str(ac.get("type", "")).lower()
+        #bloco = blocks[current]
+        #ac = bloco.get("params", {})   # params gravado no JSON
+        #tipo = str(ac.get("type", "")).lower()
 
         try:
             # -------- AÇÕES BÁSICAS ----------------------------------
@@ -153,8 +167,8 @@ def executar_macro_flow(json_path: str, progress_callback=None, label_callback=N
                     # ------------ OCR simples -------------
                     bbox = (ac["x"], ac["y"],
                             ac["x"] + ac["w"], ac["y"] + ac["h"])
-                    img = ImageGrab.grab(bbox=bbox)
-                    detectado = pytesseract.image_to_string(img).strip().lower()
+                    img = safe_grab(bbox=bbox)
+                    detectado = safe_ocr(img).strip().lower()
 
                     esperado   = ac.get("text", "").strip().lower()
                     if ac.get("vazio"):
@@ -165,8 +179,8 @@ def executar_macro_flow(json_path: str, progress_callback=None, label_callback=N
                 elif tipo == "ocr_duplo":
                     # ------------ OCR duplo ---------------
                     def _lê(bx, by, bw, bh):
-                        img = ImageGrab.grab(bbox=(bx, by, bx+bw, by+bh))
-                        return pytesseract.image_to_string(img).strip().lower()
+                        img = safe_grab(bbox=(bx, by, bx+bw, by+bh))
+                        return safe_ocr(img).strip().lower()
 
                     t1 = _lê(ac["x1"], ac["y1"], ac["w1"], ac["h1"])
                     t2 = _lê(ac["x2"], ac["y2"], ac["w2"], ac["h2"])
@@ -209,7 +223,7 @@ def executar_macro_flow(json_path: str, progress_callback=None, label_callback=N
                                                            "img", os.path.basename(raw)))
                     except Exception:
                         pass  # se não conseguir abrir, segue adiante
-
+                    
                     # 3) pega o primeiro que existir
                     for tpl in candidatos:
                         if os.path.isfile(tpl):
@@ -224,7 +238,7 @@ def executar_macro_flow(json_path: str, progress_callback=None, label_callback=N
                     if all(k in ac for k in ("x", "y", "w", "h")) and ac["w"] > 0 and ac["h"] > 0:
                         bbox = (ac["x"], ac["y"],
                                 ac["x"] + ac["w"], ac["y"] + ac["h"])
-                        base = ImageGrab.grab(bbox=bbox)
+                        base = safe_grab(bbox=bbox)
                     else:
                         base = pyautogui.screenshot()
 
@@ -246,36 +260,34 @@ def executar_macro_flow(json_path: str, progress_callback=None, label_callback=N
                     destino = destino[0]
                 current = destino
                 continue  # vai para o próximo loop da WHILE
-
+            
             elif tipo == 'screenshot':
                 # captura da screenshot
                 if ac.get('mode') == 'whole':
-                    img = ImageGrab.grab()
+                    img = safe_grab()
                 else:
                     r = ac.get('region', {})
-                    img = ImageGrab.grab(bbox=(r['x'], r['y'], r['x']+r['w'], r['y']+r['h']))
+                    img = safe_grab(bbox=(r['x'], r['y'], r['x']+r['w'], r['y']+r['h']))
                 # destino
                 st = ac.get('save_to')
                 if st == 'disk':
                     base = ac.get('custom_path') if ac.get('path_mode') == 'custom' else os.getcwd()
                     fname = f"screenshot_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png"
-                    print(f"[DEBUG] Salvando screenshot em {os.path.join(base, fname)}")
-                    img.save(os.path.join(base, fname))
+                    full_path = os.path.join(base, fname)
+                    print(f"[DEBUG] Salvando screenshot em {full_path}")
+                    safe_save(img, full_path)
                 elif st == 'clipboard':
                     buf = io.BytesIO()
                     img.convert('RGB').save(buf, 'BMP')
                     data = buf.getvalue()[14:]
                     buf.close()
-                    win32clipboard.OpenClipboard()
-                    win32clipboard.EmptyClipboard()
-                    win32clipboard.SetClipboardData(win32clipboard.CF_DIB, data)
-                    win32clipboard.CloseClipboard()
+                    safe_clipboard_set(data)
                 elif st == 'telegram':
                     # salva temporariamente no disco
                     base = ac.get('custom_path') if ac.get('path_mode')=='custom' else os.getcwd()
                     fname = f"screenshot_{datetime.now():%Y%m%d_%H%M%S}.png"
                     full_path = os.path.join(base, fname)
-                    img.save(full_path)
+                    safe_save(img, full_path)
 
                     # envia via Telegram
                     send_photo(
@@ -288,7 +300,7 @@ def executar_macro_flow(json_path: str, progress_callback=None, label_callback=N
                 default_outs = next_map[current]['default']
                 current = default_outs[0] if default_outs else None
                 continue
-
+            
             # (outros tipos como loopstart/loopend/goto/label
             #  podem ser implementados usando next_map)
 
@@ -299,5 +311,26 @@ def executar_macro_flow(json_path: str, progress_callback=None, label_callback=N
         # -------- fluxo normal --------------------------------------
         default_outs = next_map[current]["default"]
         current = default_outs[0] if default_outs else None
+def safe_grab(bbox=None):
+    with _grab_lock:
+        return ImageGrab.grab(bbox=bbox)
+def safe_ocr(img):
+    with _tess_lock:
+        return pytesseract.image_to_string(img)
+def safe_save(img, path):
+    with _io_lock:
+        img.save(path)
+def safe_clipboard_set(data_bytes):
+    with _clipboard_lock:
+        win32clipboard.OpenClipboard()
+        win32clipboard.EmptyClipboard()
+        win32clipboard.SetClipboardData(win32clipboard.CF_DIB, data_bytes)
+        win32clipboard.CloseClipboard()
 
+def executar_macro_flow(json_path: str, progress_callback=None, label_callback=None):
+    blocks, next_map, start = load_macro_flow(json_path)
+    global macro_parar, macro_pausar
+    macro_parar = macro_pausar = False
+    threading.Thread(target=_monitorar_teclas, daemon=True).start()
+    _run_branch(blocks, next_map, json_path, start, progress_callback, label_callback)
     print("Execução da macro concluída.")
