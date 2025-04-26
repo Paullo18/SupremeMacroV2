@@ -113,20 +113,19 @@ def _run_branch(blocks, next_map, json_path, start_block, progress_callback, lab
         ac = bloco.get("params", {})
         tipo = ac.get("type", "").lower()
 
-        outs = list(next_map[current]["default"])
-        if next_map[current]["true"]  is not None: outs.append(next_map[current]["true"])
-        if next_map[current]["false"] is not None: outs.append(next_map[current]["false"])
-
-        if len(outs) > 1:
+        # ① apenas forks implícitos de DEFAULT (não interferir em true/false)
+        default_outs = next_map[current]["default"]
+        if len(default_outs) > 1:
             threads = []
-            for destino in outs:
+            for dst in default_outs:
                 t = threading.Thread(
                     target=_run_branch,
-                    args=(blocks, next_map, json_path, destino, progress_callback, label_callback),
+                    args=(blocks, next_map, json_path, dst, progress_callback, label_callback),
                     daemon=True
                 )
                 t.start()
                 threads.append(t)
+            # opcional: esperar todos antes de continuar
             for t in threads:
                 t.join()
             return
