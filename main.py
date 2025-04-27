@@ -146,7 +146,7 @@ class FlowchartApp:
     def parar_macro(self):          pass
     def abrir_configuracoes(self):
         dialog = SettingsDialog(self.root)
-        self.wait_window(dialog)
+        dialog.wait_window()
     def testar_ocr(self):           pass
     def abrir_documentacao(self):   pass
     def sobre(self):                messagebox.showinfo("Sobre", "TraderAutoSuite v0.6")
