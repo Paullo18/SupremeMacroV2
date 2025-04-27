@@ -8,6 +8,7 @@ from PIL import Image, ImageTk
 from core.update_list import update_list
 from core.storage import export_macro_to_tmp, salvar_macro_gui, obter_caminho_macro_atual
 from core.executar import executar_macro_flow
+from gui.macro_status import MacroStatusWindow
 from gui.settings_window import SettingsDialog
 import json, os, shutil, threading
 import core.storage as storage
@@ -89,6 +90,12 @@ class FlowchartApp:
         self.canvas.pack    (side="right", fill="both", expand=True, padx=6, pady=6)
         #self.canvas.configure(scrollregion=(0, 0, 5000, 5000))
 
+        # eventos de controle
+        self.pause_event = threading.Event()
+        self.stop_event  = threading.Event()
+        self.macro_thread = None
+        self.status_win   = None
+
         # -----------------------------------------------
         #  ZOOM  +  PAN (arrastar com botão direito)
         # -----------------------------------------------
@@ -142,7 +149,92 @@ class FlowchartApp:
     def recortar(self):             pass
     def toggle_toolbar(self):       pass
     def toggle_properties(self):    pass
-    def executar_macro(self):       pass
+
+    def _get_block_label(self, block_id: str) -> str:
+        """
+        Retorna o texto da label do bloco com o id dado.
+        Se não encontrar, retorna o próprio id.
+        """
+        for bloco in self.blocos.blocks:
+            # compara como string para evitar mismatches int vs str
+            if str(bloco.get("id")) == str(block_id):
+                label_id = bloco.get("label_id")
+                if label_id:
+                    return self.canvas.itemcget(label_id, "text")
+        return block_id
+    
+    def executar_macro(self):
+        # 1) minimiza a janela principal
+        self.root.iconify()
+
+        # 2) exporta para tmp (mesma lógica de antes)
+        tmp_path = export_macro_to_tmp(
+            self.blocos.blocks,
+            self._build_arrows_data(),
+            macro_name=(os.path.basename(
+                os.path.dirname(storage.caminho_macro_real)
+            ) if storage.caminho_macro_real else None)
+        )
+
+        # 3) instancia a janela de status
+        status_win = MacroStatusWindow(
+            master=self.root,
+            on_close=self.root.deiconify
+        )
+
+        # 4) dispara a thread que chama o core com callbacks para UI
+        self.macro_thread = threading.Thread(
+            target=lambda: self._run_with_ui(tmp_path, status_win),
+            daemon=True
+        )
+        self.macro_thread.start()
+
+    def _run_with_ui(self, json_path: str, status_win: MacroStatusWindow):
+    
+        # cria evento de stop para esta thread
+        stop_evt = threading.Event()
+        # registra no status window para o botão individual
+        status_win.register_stop_event(threading.current_thread().name, stop_evt)
+        # callback de progresso: repassa ao status window com nome da thread
+        def progress_cb(step, total):
+            name = threading.current_thread().name
+            status_win.update_progress(name, step, total)
+    
+        # callback de bloco: filtra por tipos e envia label com nome da thread
+        def label_cb(raw_text: str):
+            name = threading.current_thread().name
+            # raw_text esperado: "Executando bloco <id>"
+            block_id = raw_text.rsplit(" ", 1)[-1]
+            for bloco in self.blocos.blocks:
+                if str(bloco.get("id")) == block_id:
+                    tipo = str(bloco.get("acao", {}).get("type", "")).lower()
+                    if tipo in ("ocr", "ocr_duplo", "screenshot", "click", "text", "delay", "imagem"):
+                        label_id = bloco.get("label_id")
+                        if label_id:
+                            label = self.canvas.itemcget(label_id, "text")
+                        else:
+                            label = block_id
+                        # aqui passa o name para atualizar o widget certo
+                        status_win.update_block(name, label)
+                    break
+        print([t.name for t in threading.enumerate()])
+                
+        # chama o executor com stop_event específico
+        executar_macro_flow(
+            json_path,
+            progress_callback=progress_cb,
+            label_callback=label_cb,
+            stop_event=stop_evt
+        )
+    
+        # ao terminar, fecha a janela de status e restaura a principal
+        try:
+            status_win.win.destroy()
+        except:
+            pass
+        self.root.deiconify()
+    
+
     def parar_macro(self):          pass
     def abrir_configuracoes(self):
         dialog = SettingsDialog(self.root)
@@ -290,19 +382,8 @@ class FlowchartApp:
         # BOTÃO EXECUTAR
         # ------------------------------------------------------------------
         if nome == "Executar":
-            macro_name = None
-            if storage.caminho_macro_real:                       # macro já foi salva
-                macro_name = os.path.basename(
-                    os.path.dirname(storage.caminho_macro_real)
-                )
-            
-            tmp_path = export_macro_to_tmp(self.blocos.blocks,
-                               self._build_arrows_data(),
-                               macro_name=macro_name)
-            threading.Thread(
-                target=lambda: executar_macro_flow(tmp_path),
-                daemon=True
-            ).start()
+            self.executar_macro()
+            return
 
 
     # -----------------------------------------------------
