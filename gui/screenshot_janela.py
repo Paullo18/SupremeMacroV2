@@ -83,22 +83,30 @@ def add_screenshot(actions, update_list, tela, *, initial=None):
 
     # Interface
     def update_mode():
+        # atualiza preview conforme modo
         stop_preview()
         canvas_main.delete('all')
         if mode_var.get() == 'region':
             btn_select.config(state='normal')
-            canvas_main.create_text(
-                int(canvas_main['width'])//2,
-                int(canvas_main['height'])//2,
-                text="Selecione uma região!",
-                anchor='center'
-            )
             lbl_title.config(text="Região Selecionada")
-            lbl_coords.config(text="Selecione uma região!")
+            if region.get('w', 0) > 0 and region.get('h', 0) > 0:
+                # Live preview da região selecionada
+                start_preview()
+                lbl_coords.config(text=f"x={region['x']} y={region['y']} w={region['w']} h={region['h']}")
+            else:
+                # prompt para seleção
+                canvas_main.create_text(
+                    int(canvas_main['width'])//2,
+                    int(canvas_main['height'])//2,
+                    text="Selecione uma região!",
+                    anchor='center'
+                )
+                lbl_coords.config(text="Selecione uma região!")
         else:
             btn_select.config(state='disabled')
             lbl_title.config(text="Tela Toda")
             lbl_coords.config(text="")
+            # live preview da tela inteira
             start_preview()
 
     def update_behavior():
@@ -187,7 +195,11 @@ def add_screenshot(actions, update_list, tela, *, initial=None):
             'token':token_used,'chat_id':chat_used,'telegram_mode':telegram_mode.get(),
             'custom_message_enabled':custom_msg.get(),'custom_message':message_var.get()
         }
-        actions.append(cfg); update_list(); win.destroy()
+        # Substitui qualquer configuração anterior pela nova
+        actions.clear()
+        actions.append(cfg)
+        update_list()
+        win.destroy()
 
     # Layout
     left = Frame(win); right = Frame(win)
