@@ -1,0 +1,155 @@
+{
+  "macro_name": "TestThread",
+  "blocks": [
+    {
+      "id": 61,
+      "type": "Label",
+      "params": {
+        "type": "label",
+        "name": "Inicio"
+      },
+      "x": 111.0,
+      "y": 251.0
+    },
+    {
+      "id": 62,
+      "type": "Clique",
+      "params": {
+        "type": "click",
+        "x": 1208,
+        "y": 1421
+      },
+      "x": 451.0,
+      "y": 110.0
+    },
+    {
+      "id": 63,
+      "type": "Se Imagem",
+      "params": {
+        "type": "imagem",
+        "x": 1015,
+        "y": 386,
+        "w": 154,
+        "h": 78,
+        "imagem": "img\\imagem_20250425_200125_275036.png"
+      },
+      "x": 274.0,
+      "y": 151.0
+    },
+    {
+      "id": 64,
+      "type": "Screenshot",
+      "params": {
+        "type": "screenshot",
+        "mode": "whole",
+        "region": {
+          "x": 0,
+          "y": 0,
+          "w": 0,
+          "h": 0
+        },
+        "save_to": "telegram",
+        "path_mode": "default",
+        "custom_path": "",
+        "token": "8175439343:AAE6HIVlnoGokSiEudlDzPIYiOv_dkS5ykQ",
+        "chat_id": "1612386126",
+        "custom_message_enabled": true,
+        "custom_message": "Teste Thread"
+      },
+      "x": 274.0,
+      "y": 32.0
+    },
+    {
+      "id": 65,
+      "type": "Clique",
+      "params": {
+        "type": "click",
+        "x": 1329,
+        "y": 1423
+      },
+      "x": 456.0,
+      "y": 193.0
+    },
+    {
+      "id": 66,
+      "type": "Se Imagem",
+      "params": {
+        "type": "imagem",
+        "x": 961,
+        "y": 656,
+        "w": 257,
+        "h": 197,
+        "imagem": "img\\imagem_20250425_200135_479178.png"
+      },
+      "x": 275.0,
+      "y": 300.0
+    },
+    {
+      "id": 67,
+      "type": "Screenshot",
+      "params": {
+        "type": "screenshot",
+        "mode": "region",
+        "region": {
+          "x": 1262,
+          "y": 695,
+          "w": 473,
+          "h": 259
+        },
+        "save_to": "telegram",
+        "path_mode": "default",
+        "custom_path": "",
+        "token": "8175439343:AAE6HIVlnoGokSiEudlDzPIYiOv_dkS5ykQ",
+        "chat_id": "1612386126",
+        "custom_message_enabled": false,
+        "custom_message": ""
+      },
+      "x": 274.0,
+      "y": 420.0
+    }
+  ],
+  "connections": [
+    {
+      "from": 61,
+      "to": 63,
+      "branch": null,
+      "color": "#000"
+    },
+    {
+      "from": 63,
+      "to": 62,
+      "branch": "true",
+      "color": "green"
+    },
+    {
+      "from": 63,
+      "to": 65,
+      "branch": "false",
+      "color": "red"
+    },
+    {
+      "from": 63,
+      "to": 64,
+      "branch": "true",
+      "color": "green"
+    },
+    {
+      "from": 61,
+      "to": 66,
+      "branch": null,
+      "color": "#000"
+    },
+    {
+      "from": 66,
+      "to": 65,
+      "branch": "false",
+      "color": "red"
+    },
+    {
+      "from": 66,
+      "to": 67,
+      "branch": "true",
+      "color": "green"
+    }
+  ]
+}

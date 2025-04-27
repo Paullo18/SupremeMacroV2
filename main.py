@@ -8,6 +8,7 @@ from PIL import Image, ImageTk
 from core.update_list import update_list
 from core.storage import export_macro_to_tmp, salvar_macro_gui, obter_caminho_macro_atual
 from core.executar import executar_macro_flow
+from gui.settings_window import SettingsDialog
 import json, os, shutil, threading
 import core.storage as storage
 
@@ -20,7 +21,7 @@ def macro_em_pasta_macros(path_):
 class FlowchartApp:
     def __init__(self, root):
         self.root = root
-        self.root.title("TraderAutoSuite v0.4")
+        self.root.title("TraderAutoSuite v0.6")
         # ---------------- layout da janela -----------------
         largura_janela, altura_janela = 1400, 700
         largura_tela  = root.winfo_screenwidth()
@@ -28,6 +29,56 @@ class FlowchartApp:
         pos_x = (largura_tela // 2) - (largura_janela // 2)
         pos_y = (altura_tela // 2) - (altura_janela // 2)
         root.geometry(f"{largura_janela}x{altura_janela}+{pos_x}+{pos_y}")
+
+        # ————— Barra de Menu —————
+        menubar = tk.Menu(self.root)
+
+        # Arquivo
+        arquivo_menu = tk.Menu(menubar, tearoff=0)
+        arquivo_menu.add_command(label="Novo", command=self.novo_arquivo)
+        arquivo_menu.add_command(label="Abrir...", command=self._acao_carregar)
+        arquivo_menu.add_command(label="Salvar", command=self.salvar_arquivo)
+        arquivo_menu.add_separator()
+        arquivo_menu.add_command(label="Sair", command=self.root.quit)
+        menubar.add_cascade(label="Arquivo", menu=arquivo_menu)
+
+        # Editar
+        editar_menu = tk.Menu(menubar, tearoff=0)
+        editar_menu.add_command(label="Desfazer", command=self.desfazer)
+        editar_menu.add_command(label="Refazer", command=self.refazer)
+        editar_menu.add_separator()
+        editar_menu.add_command(label="Copiar",   command=self.copiar)
+        editar_menu.add_command(label="Colar",    command=self.colar)
+        editar_menu.add_command(label="Recortar", command=self.recortar)
+        menubar.add_cascade(label="Editar", menu=editar_menu)
+
+        # View (Exibir)
+        view_menu = tk.Menu(menubar, tearoff=0)
+        view_menu.add_checkbutton(label="Mostrar Barra de Ferramentas",  command=self.toggle_toolbar)
+        view_menu.add_checkbutton(label="Mostrar Painel de Propriedades", command=self.toggle_properties)
+        menubar.add_cascade(label="View", menu=view_menu)
+
+        # Ações
+        acoes_menu = tk.Menu(menubar, tearoff=0)
+        acoes_menu.add_command(label="Executar Macro", command=self.executar_macro)
+        acoes_menu.add_command(label="Parar Macro",    command=self.parar_macro)
+        menubar.add_cascade(label="Ações", menu=acoes_menu)
+
+        # Ferramentas
+        tools_menu = tk.Menu(menubar, tearoff=0)
+        tools_menu.add_command(label="Opções...", command=self.abrir_configuracoes)
+        tools_menu.add_command(label="Testar OCR", command=self.testar_ocr)
+        menubar.add_cascade(label="Ferramentas", menu=tools_menu)
+
+        # Ajuda
+        help_menu = tk.Menu(menubar, tearoff=0)
+        help_menu.add_command(label="Documentação", command=self.abrir_documentacao)
+        help_menu.add_separator()
+        help_menu.add_command(label="Sobre", command=self.sobre)
+        menubar.add_cascade(label="Ajuda", menu=help_menu)
+
+        # Associa a barra de menu à janela
+        self.root.config(menu=menubar)
 
         # -------- frames e canvas --------------------------
         self.top_frame   = tk.Frame(root, height=50,  bg="#e0e0e0")
@@ -80,7 +131,25 @@ class FlowchartApp:
         self._criar_botoes_topo()
         self._criar_botoes_menu()
         bind_eventos(self.canvas, self.blocos, self.setas, self.root)
-
+    # Métodos de callback (adicione as implementações que desejar)
+    def novo_arquivo(self):          messagebox.showinfo("Novo", "Novo arquivo…")
+    def abrir_arquivo(self):        messagebox.showinfo("Abrir", "Abrir arquivo…")
+    def salvar_arquivo(self):       messagebox.showinfo("Salvar","Salvar arquivo…")
+    def desfazer(self):             pass
+    def refazer(self):              pass
+    def copiar(self):               pass
+    def colar(self):                pass
+    def recortar(self):             pass
+    def toggle_toolbar(self):       pass
+    def toggle_properties(self):    pass
+    def executar_macro(self):       pass
+    def parar_macro(self):          pass
+    def abrir_configuracoes(self):
+        dialog = SettingsDialog(self.root)
+        dialog.wait_window()
+    def testar_ocr(self):           pass
+    def abrir_documentacao(self):   pass
+    def sobre(self):                messagebox.showinfo("Sobre", "TraderAutoSuite v0.6")
     # =====================================================
     # UI helpers
     # =====================================================

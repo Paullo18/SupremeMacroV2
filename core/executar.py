@@ -258,6 +258,7 @@ def _run_branch(blocks, next_map, json_path, start_block, progress_callback, lab
                         base = pyautogui.screenshot()
 
                     base = cv2.cvtColor(np.array(base), cv2.COLOR_RGB2BGR)
+
                     templ = cv2.imread(tpl, cv2.IMREAD_COLOR)
 
                     res = cv2.matchTemplate(base, templ, cv2.TM_CCOEFF_NORMED)
