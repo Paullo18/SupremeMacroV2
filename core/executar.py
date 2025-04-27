@@ -106,7 +106,8 @@ def load_macro_flow(json_path: str):
 # Executor principal
 # -----------------------------------------------------------
 
-def _run_branch(blocks, next_map, json_path, start_block, progress_callback, label_callback):
+def _run_branch(blocks, next_map, json_path, start_block,
+                progress_callback, label_callback, stop_event=None):
     step  = 0
     total = len(blocks)
     current = start_block
@@ -132,7 +133,7 @@ def _run_branch(blocks, next_map, json_path, start_block, progress_callback, lab
             return
 
         # —————— resto do seu laço (será executado quando só houver UMA saída) ——————
-        if macro_parar:
+        if (stop_event and stop_event.is_set()) or macro_parar:
             print("Macro interrompida pelo usuário (Ctrl+Q).")
             break
         while macro_pausar:
@@ -360,10 +361,12 @@ def safe_clipboard_set(data_bytes):
         win32clipboard.SetClipboardData(win32clipboard.CF_DIB, data_bytes)
         win32clipboard.CloseClipboard()
 
-def executar_macro_flow(json_path: str, progress_callback=None, label_callback=None):
+def executar_macro_flow(json_path: str, progress_callback=None,
+                        label_callback=None, stop_event=None):
     blocks, next_map, start = load_macro_flow(json_path)
     global macro_parar, macro_pausar
     macro_parar = macro_pausar = False
     threading.Thread(target=_monitorar_teclas, daemon=True).start()
-    _run_branch(blocks, next_map, json_path, start, progress_callback, label_callback)
+    _run_branch(blocks, next_map, json_path, start,
+                progress_callback, label_callback, stop_event)
     print("Execução da macro concluída.")
