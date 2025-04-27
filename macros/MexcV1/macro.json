@@ -1,0 +1,466 @@
+{
+  "macro_name": "MexcV1",
+  "blocks": [
+    {
+      "id": 1,
+      "type": "Label",
+      "params": {
+        "type": "label",
+        "name": "Inicio"
+      },
+      "x": 20,
+      "y": 20
+    },
+    {
+      "id": 2,
+      "type": "Label",
+      "params": {
+        "type": "label",
+        "name": "ChartUpdate"
+      },
+      "x": 177.0,
+      "y": 20.0
+    },
+    {
+      "id": 3,
+      "type": "Label",
+      "params": {
+        "type": "label",
+        "name": "CheckSignal"
+      },
+      "x": 181.0,
+      "y": 127.0
+    },
+    {
+      "id": 4,
+      "type": "Screenshot",
+      "params": {
+        "type": "screenshot",
+        "mode": "region",
+        "region": {
+          "x": 56,
+          "y": 161,
+          "w": 599,
+          "h": 578
+        },
+        "save_to": "telegram",
+        "path_mode": "default",
+        "custom_path": "",
+        "token": "8175439343:AAE6HIVlnoGokSiEudlDzPIYiOv_dkS5ykQ",
+        "chat_id": "-1002633076439",
+        "telegram_mode": "default",
+        "custom_message_enabled": true,
+        "custom_message": "Chart Update"
+      },
+      "x": 333.0,
+      "y": 20.0
+    },
+    {
+      "id": 5,
+      "type": "Delay",
+      "params": {
+        "type": "delay",
+        "time": 3600000
+      },
+      "x": 510.0,
+      "y": 20.0
+    },
+    {
+      "id": 6,
+      "type": "GoTo",
+      "params": {
+        "type": "goto",
+        "label": "ChartUpdate"
+      },
+      "x": 676.0,
+      "y": 20.0
+    },
+    {
+      "id": 8,
+      "type": "OCR",
+      "params": {
+        "type": "ocr",
+        "x": 57,
+        "y": 913,
+        "w": 180,
+        "h": 100,
+        "text": "Open",
+        "verificar_vazio": false
+      },
+      "x": 335.0,
+      "y": 127.0
+    },
+    {
+      "id": 9,
+      "type": "GoTo",
+      "params": {
+        "type": "goto",
+        "label": "CheckSignal"
+      },
+      "x": 335.0,
+      "y": 225.0
+    },
+    {
+      "id": 10,
+      "type": "Clique",
+      "params": {
+        "type": "click",
+        "x": 745,
+        "y": 412
+      },
+      "x": 487.0,
+      "y": 127.0
+    },
+    {
+      "id": 11,
+      "type": "Texto",
+      "params": {
+        "type": "text",
+        "content": "10000"
+      },
+      "x": 646.0,
+      "y": 127.0
+    },
+    {
+      "id": 12,
+      "type": "OCR",
+      "params": {
+        "type": "ocr",
+        "x": 53,
+        "y": 960,
+        "w": 187,
+        "h": 52,
+        "text": "Long",
+        "verificar_vazio": false
+      },
+      "x": 801.0,
+      "y": 127.0
+    },
+    {
+      "id": 13,
+      "type": "Clique",
+      "params": {
+        "type": "click",
+        "x": 775,
+        "y": 699
+      },
+      "x": 801.0,
+      "y": 20.0
+    },
+    {
+      "id": 14,
+      "type": "Clique",
+      "params": {
+        "type": "click",
+        "x": 881,
+        "y": 697
+      },
+      "x": 801.0,
+      "y": 226.0
+    },
+    {
+      "id": 15,
+      "type": "Delay",
+      "params": {
+        "type": "delay",
+        "time": 1000
+      },
+      "x": 1013.0,
+      "y": 127.0
+    },
+    {
+      "id": 16,
+      "type": "Screenshot",
+      "params": {
+        "type": "screenshot",
+        "mode": "region",
+        "region": {
+          "x": 717,
+          "y": 844,
+          "w": 289,
+          "h": 116
+        },
+        "save_to": "telegram",
+        "path_mode": "default",
+        "custom_path": "",
+        "token": "8175439343:AAE6HIVlnoGokSiEudlDzPIYiOv_dkS5ykQ",
+        "chat_id": "-1002633076439",
+        "telegram_mode": "default",
+        "custom_message_enabled": true,
+        "custom_message": "Entrada Detectada!"
+      },
+      "x": 1013.0,
+      "y": 25.0
+    },
+    {
+      "id": 17,
+      "type": "GoTo",
+      "params": {
+        "type": "goto",
+        "label": "Close"
+      },
+      "x": 1015.0,
+      "y": 229.0
+    },
+    {
+      "id": 18,
+      "type": "Label",
+      "params": {
+        "type": "label",
+        "name": "Close"
+      },
+      "x": 989.0,
+      "y": 357.0
+    },
+    {
+      "id": 19,
+      "type": "OCR duplo",
+      "params": {
+        "type": "ocr_duplo",
+        "x1": 52,
+        "y1": 909,
+        "w1": 186,
+        "h1": 57,
+        "x2": 49,
+        "y2": 913,
+        "w2": 191,
+        "h2": 53,
+        "text1": "Stop Long",
+        "text2": "Stop Short",
+        "condicao": "or",
+        "vazio1": false,
+        "vazio2": false
+      },
+      "x": 838.0,
+      "y": 357.0
+    },
+    {
+      "id": 20,
+      "type": "GoTo",
+      "params": {
+        "type": "goto",
+        "label": "Close"
+      },
+      "x": 838.0,
+      "y": 448.0
+    },
+    {
+      "id": 21,
+      "type": "Clique",
+      "params": {
+        "type": "click",
+        "x": 1464,
+        "y": 952
+      },
+      "x": 677.0,
+      "y": 357.0
+    },
+    {
+      "id": 22,
+      "type": "Delay",
+      "params": {
+        "type": "delay",
+        "time": 1000
+      },
+      "x": 525.0,
+      "y": 357.0
+    },
+    {
+      "id": 23,
+      "type": "Clique",
+      "params": {
+        "type": "click",
+        "x": 1473,
+        "y": 954
+      },
+      "x": 367.0,
+      "y": 357.0
+    },
+    {
+      "id": 24,
+      "type": "GoTo",
+      "params": {
+        "type": "goto",
+        "label": "CheckSignal"
+      },
+      "x": 207.0,
+      "y": 357.0
+    },
+    {
+      "id": 25,
+      "type": "Screenshot",
+      "params": {
+        "type": "screenshot",
+        "mode": "region",
+        "region": {
+          "x": 1140,
+          "y": 887,
+          "w": 131,
+          "h": 104
+        },
+        "save_to": "telegram",
+        "path_mode": "default",
+        "custom_path": "",
+        "token": "8175439343:AAE6HIVlnoGokSiEudlDzPIYiOv_dkS5ykQ",
+        "chat_id": "-1002633076439",
+        "telegram_mode": "default",
+        "custom_message_enabled": true,
+        "custom_message": "Trade Closed!"
+      },
+      "x": 676.0,
+      "y": 305.0
+    }
+  ],
+  "connections": [
+    {
+      "from": 1,
+      "to": 2,
+      "branch": null,
+      "color": "#000"
+    },
+    {
+      "from": 1,
+      "to": 3,
+      "branch": null,
+      "color": "#000"
+    },
+    {
+      "from": 2,
+      "to": 4,
+      "branch": null,
+      "color": "#000"
+    },
+    {
+      "from": 4,
+      "to": 5,
+      "branch": null,
+      "color": "#000"
+    },
+    {
+      "from": 5,
+      "to": 6,
+      "branch": null,
+      "color": "#000"
+    },
+    {
+      "from": 8,
+      "to": 9,
+      "branch": "false",
+      "color": "red"
+    },
+    {
+      "from": 3,
+      "to": 8,
+      "branch": null,
+      "color": "#000"
+    },
+    {
+      "from": 8,
+      "to": 10,
+      "branch": "true",
+      "color": "green"
+    },
+    {
+      "from": 10,
+      "to": 11,
+      "branch": null,
+      "color": "#000"
+    },
+    {
+      "from": 11,
+      "to": 12,
+      "branch": null,
+      "color": "#000"
+    },
+    {
+      "from": 12,
+      "to": 13,
+      "branch": "true",
+      "color": "green"
+    },
+    {
+      "from": 12,
+      "to": 15,
+      "branch": "true",
+      "color": "green"
+    },
+    {
+      "from": 12,
+      "to": 14,
+      "branch": "false",
+      "color": "red"
+    },
+    {
+      "from": 15,
+      "to": 16,
+      "branch": null,
+      "color": "#000"
+    },
+    {
+      "from": 12,
+      "to": 17,
+      "branch": "true",
+      "color": "green"
+    },
+    {
+      "from": 12,
+      "to": 17,
+      "branch": "false",
+      "color": "red"
+    },
+    {
+      "from": 17,
+      "to": 18,
+      "branch": null,
+      "color": "#000"
+    },
+    {
+      "from": 18,
+      "to": 19,
+      "branch": null,
+      "color": "#000"
+    },
+    {
+      "from": 19,
+      "to": 20,
+      "branch": "false",
+      "color": "red"
+    },
+    {
+      "from": 19,
+      "to": 21,
+      "branch": "true",
+      "color": "green"
+    },
+    {
+      "from": 21,
+      "to": 22,
+      "branch": null,
+      "color": "#000"
+    },
+    {
+      "from": 22,
+      "to": 23,
+      "branch": null,
+      "color": "#000"
+    },
+    {
+      "from": 23,
+      "to": 24,
+      "branch": null,
+      "color": "#000"
+    },
+    {
+      "from": 19,
+      "to": 25,
+      "branch": "true",
+      "color": "green"
+    },
+    {
+      "from": 9,
+      "to": 3,
+      "branch": null,
+      "color": "#000"
+    }
+  ]
+}
