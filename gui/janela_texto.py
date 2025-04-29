@@ -2,40 +2,27 @@ import tkinter as tk
 from tkinter import ttk, messagebox
 
 
-def add_texto(actions, update_list, tela, listbox=None):
-    """Exibe uma janela para inserir texto que será digitado pela macro.
-
-    Parâmetros
-    ----------
-    actions : list
-        Lista usada pelo chamador para armazenar ações; a função
-        acrescenta um dicionário com a estrutura
-        ``{"type": "text", "content": <str>}``.
-    update_list : Callable
-        Callback invocado após adicionar a ação — normalmente refresca a
-        Treeview/listbox do editor.
-    tela : tk.Tk | tk.Toplevel
-        Janela principal (root) — serve como `master` do Toplevel.
-    listbox : tk.Listbox | None, opcional
-        Fornecido em alguns fluxos para inserir o item na posição correta;
-        não é obrigatório.
-    """
-
-    # ---------- janela modal ----------
+def add_texto(actions, update_list, tela, listbox=None, *, initial=None):
+    # cria janela modal
     top = tk.Toplevel(tela)
+    top.withdraw()
+    top.transient(tela)
     top.title("Adicionar Texto")
     top.resizable(False, False)
-    top.grab_set()  # força modal
 
-    # ---------- campo de entrada ----------
-    ttk.Label(top, text="Texto a digitar:").pack(padx=10, pady=(10, 2), anchor="w")
+    # --- Campo editável para label customizada do bloco -----------
+    ttk.Label(top, text="Nome do bloco:").pack(anchor="w", padx=10, pady=(10, 0))
+    name_var = tk.StringVar(value=initial.get('name', '') if initial else '')
+    ttk.Entry(top, textvariable=name_var, width=48).pack(fill="x", padx=10, pady=(0, 10))
 
-    texto_var = tk.StringVar()
+    # --- Campo de entrada de texto ---------------------------------
+    ttk.Label(top, text="Texto a digitar:").pack(padx=10, pady=(0, 2), anchor="w")
+    texto_var = tk.StringVar(value=initial.get('content', '') if initial else '')
     entry = ttk.Entry(top, textvariable=texto_var, width=48)
     entry.pack(padx=10, pady=(0, 10), fill="x")
     entry.focus_set()
 
-    # ---------- botões OK / Cancelar ----------
+    # --- Botões OK / Cancelar --------------------------------------
     frame_btn = ttk.Frame(top)
     frame_btn.pack(pady=(0, 10))
 
@@ -44,19 +31,22 @@ def add_texto(actions, update_list, tela, listbox=None):
         if not conteudo.strip():
             messagebox.showwarning("Campo vazio", "Digite algum texto antes de confirmar.")
             return
-
-        # adiciona a ação e atualiza a interface do chamador
-        actions.append({"type": "text", "content": conteudo})
+        ac = {"type": "text", "content": conteudo}
+        nome = name_var.get().strip()
+        if nome:
+            ac["name"] = nome
+        actions.append(ac)
         if callable(update_list):
             update_list()
-
-        # se listbox foi fornecido, insere na posição adequada (mesma lógica usada por outras janelas)
         if listbox is not None:
             try:
-                listbox.insert(tk.END, f'TXT: "{conteudo[:18]}…"' if len(conteudo) > 20 else f'TXT: "{conteudo}"')
+                preview = (
+                    f'TXT: "{conteudo[:18]}…"' if len(conteudo) > 20
+                    else f'TXT: "{conteudo}"'
+                )
+                listbox.insert(tk.END, preview)
             except Exception:
                 pass
-
         top.destroy()
 
     def cancelar(*_):
@@ -68,3 +58,16 @@ def add_texto(actions, update_list, tela, listbox=None):
     # atalhos de teclado
     top.bind("<Return>", confirmar)
     top.bind("<Escape>", cancelar)
+
+    # --- Centralizar, bloquear resize, foco ------------------------
+    top.update_idletasks()
+    px, py = tela.winfo_rootx(), tela.winfo_rooty()
+    pw, ph = tela.winfo_width(), tela.winfo_height()
+    w, h = top.winfo_width(), top.winfo_height()
+    x = px + (pw - w) // 2
+    y = py + (ph - h) // 2
+    top.geometry(f"{w}x{h}+{x}+{y}")
+    top.deiconify()
+    top.minsize(w, h)
+    top.maxsize(w, h)
+    top.focus_force()

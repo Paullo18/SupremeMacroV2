@@ -277,6 +277,8 @@ class FlowchartApp:
             ("OCR duplo",  "doubleocr_icon.png"),
             ("Loop",       "loop_icon.png"),
             ("Screenshot", "screenshot_icon.png"),
+            ("Start Thread","thread_icon.png"),
+            ("End Thread",  "threadend_icon.png"),
         ]
         for nome, arquivo in botoes_icone:
             caminho = os.path.join("icons", arquivo)

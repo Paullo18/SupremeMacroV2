@@ -610,21 +610,21 @@ class SetaManager:
             return
             
         # Determinar a cor da linha
-        color = "#000"  # default
-        if hasattr(self, "branch") and self.branch == "true" and origem.get("true_handle"):
-            color = "green"
-        elif hasattr(self, "branch") and self.branch == "false" and origem.get("false_handle"):
-            color = "red"
-
-        # ---------------- cor -----------------
-        if cor_override is not None:
-            color = cor_override            # preserva a cor antiga
+        # verifica se é fork marcado como Nova Thread
+        forks  = origem.get("acao", {}).get("forks", {})
+        dest_id = destino.get("id")
+        if dest_id in forks and forks[dest_id] == "Nova Thread":
+            color = "#0a84ff"   # azul
         else:
-            color = "#000"                  # default
-            if getattr(self, "branch", None) == "true" and origem.get("true_handle"):
+            # preserva cor antiga, se houver
+            if cor_override is not None:
+                color = cor_override
+            elif getattr(self, "branch", None) == "true":
                 color = "green"
-            elif getattr(self, "branch", None) == "false" and origem.get("false_handle"):
+            elif getattr(self, "branch", None) == "false":
                 color = "red"
+            else:
+                color = "#000"
         # -------------------------------------
             
         # Criar um identificador único para esta conexão
@@ -700,46 +700,38 @@ class SetaManager:
 
     def atualizar_setas(self, *args, **kwargs):
         """
-        Redesenha todas as setas e remove qualquer segmento ‘órfão’
-        que volte dos snapshots sem tags.
+        Redesenha todas as setas usando as cores definidas em bloco['acao']['forks']:
+          - Fluxo Principal (Continuar Fluxo) → azul  "#0a84ff"
+          - Threads Novas    (Nova Thread)     → preto "#000"
         """
-        # --- 0) monta lista para redesenhar preservando cor -------------
-        dados_redesenho = []           # [(origem, destino, cor)]
+        # 1) Guarde todas as conexões atuais
+        conexoes = list(self.setas)  # [(seta_id, origem, destino), ...]
 
-        for seta_id, origem, destino in self.setas:
-            info = self._setas_info.get(seta_id)
-            cor  = info[2] if info and len(info) >= 3 else \
-                   (self.canvas.itemcget(seta_id, "fill") or "#000")
-            dados_redesenho.append((origem, destino, cor))
-
-        # --- 1) APAGA absolutamente tudo o que já desenhamos -----------
-        # 1.a) pelos ids que guardamos
-        for info in self._setas_info.values():
-            for seg_id in info[0]:          # info[0] = lista de segmentos
-                try:
-                    self.canvas.delete(seg_id)
-                except:
-                    pass
-        # 1.b) último segmento (id principal) — garante limpeza total
-        for seta_id, _, _ in self.setas:
-            try:
-                self.canvas.delete(seta_id)
-            except:
-                pass
-
-        # 1.c) força repaint → some o ‘ghost’
+        # 2) Apague tudo como antes
+        for segs, _, _ in self._setas_info.values():
+            for sid in segs:
+                self.canvas.delete(sid)
+        for seta_id, _, _ in conexoes:
+            self.canvas.delete(seta_id)
         self.canvas.update_idletasks()
 
-        # --- 2) limpa caches internos ----------------------------------
+        # 3) Limpe caches
         self._setas_info.clear()
-        self.setas = []
+        self.setas.clear()
 
-        # --- 3) redesenha com as cores originais -----------------------
-        for origem, destino, cor in dados_redesenho:
-            if (origem is not None and destino is not None and
-                    self._centro_bloco(origem) is not None and
-                    self._centro_bloco(destino) is not None):
+        # 4) Recrie cada conexão, pintando só o principal de azul
+        for _, origem, destino in conexoes:
+            forks = origem.get("acao", {}).get("forks", {})
+            escolha = forks.get(destino["id"], "Continuar Fluxo")
+        
+            # apenas as setas que abrem thread (“Nova Thread”) são azuis
+            cor = "#0a84ff" if escolha == "Nova Thread" else "#000"
+        
+            if (origem and destino 
+                and self._centro_bloco(origem) 
+                and self._centro_bloco(destino)):
                 self.desenhar_linha(origem, destino, cor_override=cor)
+
 
 
     def remover_setas_de_bloco(self, bloco):

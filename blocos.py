@@ -12,9 +12,10 @@ from gui.janela_ocr import add_ocr
 from gui.janela_ocr_duplo import add_ocr_duplo
 from gui.janela_texto import add_texto
 from gui.screenshot_janela import add_screenshot
+from gui.fork_janela import abrir_fork_dialog
 from core.update_list import update_list
 import threading, time, pyautogui, keyboard
-from tkinter import Toplevel, IntVar, Label, Entry
+from tkinter import Toplevel, IntVar, Label, Entry, simpledialog
 import pytesseract
 
 
@@ -137,6 +138,13 @@ class BlocoManager:
         # 5) dicionário do bloco
         # --------------------------------------------------
         pil_base = pil_icon.resize((self.block_width, self.block_height), Image.LANCZOS)
+        # define ação para Start/End Thread
+        acao = {}
+        lt = nome.strip().lower()
+        if lt == "start thread":
+            acao = {"type":"startthread"}
+        elif lt == "end thread":
+            acao = {"type":"endthread"}
         bloco = {
             "id": bloco_id,
             "rect": rect,
@@ -145,7 +153,7 @@ class BlocoManager:
             "width": self.block_width,
             "height": self.block_height,
             "text": nome,
-
+            "acao": acao,
             "_pil_orig":   pil_base,
             "_icon_scale": self.app._zoom_scale,
             "_icon_ref":   tk_img,
@@ -254,6 +262,15 @@ class BlocoManager:
         elif lt == "screenshot":
             self.canvas.tag_bind(rect, "<Double-Button-1>",
                                  lambda e,b=bloco: self._on_double_click_screenshot(b))
+        elif lt == "start thread":
+             self.canvas.tag_bind(rect, "<Double-Button-1>",
+                                 lambda e, b=bloco: self._on_double_click_startthread(b)
+             )
+        elif lt == "end thread":
+             self.canvas.tag_bind(rect, "<Double-Button-1>",
+                                 lambda e, b=bloco: self._on_double_click_endthread(b)
+             )
+
 
         # --------------------------------------------------
         # 9) finaliza
@@ -297,6 +314,8 @@ class BlocoManager:
             "se imagem": "ifimage_icon.png",
             "loop": "loop_icon.png",
             "screenshot":   "screenshot_icon.png",
+            "start thread": "thread_icon.png",
+            "end thread":   "threadend_icon.png",
             "fim loop": "endloop_icon.png",
             "sair loop": "exit_loop.png",
             "fim se": "endif_icon.png",
@@ -654,6 +673,7 @@ class BlocoManager:
                     txt = f"OCR Duplo: '{acao['text1']}' {cond} '{acao['text2']}'"
                 elif tipo == "text":
                     txt = f'TXT: "{acao["content"][:18]}…"' if len(acao["content"])>20 else f'TXT: "{acao["content"]}"'
+                
                 else:
                     txt = tipo.upper()
                 novo["label_id"] = self.canvas.create_text(
@@ -932,7 +952,7 @@ class BlocoManager:
            # desenha o texto logo abaixo do bloco
            bx, by = bloco["x"], bloco["y"]
            w, h   = bloco["width"], bloco["height"]
-           texto  = f"Click @({ac['x']},{ac['y']})"
+           texto = ac.get("name") or ac.get("custom_name") or f"Click @({ac['x']},{ac['y']})"
            label_x = bx + w/2
            label_y = by + h + 8
            bloco["label_id"] = self.canvas.create_text(
@@ -965,7 +985,7 @@ class BlocoManager:
                 self.canvas.delete(bloco["label_id"])
             bx, by = bloco["x"], bloco["y"]
             w, h   = bloco["width"], bloco["height"]
-            texto = f"Delay: {ac['time']}ms"
+            texto = ac.get("name") or ac.get("custom_name") or f"Delay: {ac['time']}ms"
             bloco["label_id"] = self.canvas.create_text(
                 bx + w/2,
                 by + h + 8,
@@ -999,7 +1019,7 @@ class BlocoManager:
 
             bx, by = bloco["x"], bloco["y"]
             w, h   = bloco["width"], bloco["height"]
-            texto = f"GOTO → {ac['label']}"
+            texto = ac.get("name") or ac.get("custom_name") or f"GOTO → {ac['label']}"
             bloco["label_id"] = self.canvas.create_text(
                 bx + w/2,
                 by + h + 8,
@@ -1038,7 +1058,7 @@ class BlocoManager:
                 self.canvas.delete(bloco["label_id"])
             bx, by = bloco["x"], bloco["y"]
             w, h   = bloco["width"], bloco["height"]
-            texto = f"Img:{ac['imagem']} @({ac['x']},{ac['y']},{ac['w']},{ac['h']})"
+            texto = ac.get("name") or ac.get("custom_name") or f"Img:{ac['imagem']} @({ac['x']},{ac['y']},{ac['w']},{ac['h']})"
             bloco["label_id"] = self.canvas.create_text(
                 bx + w / 2, by + h + 8,
                 text=texto, font=("Arial", 9), fill="black"
@@ -1046,11 +1066,13 @@ class BlocoManager:
 
         # ── chama a janela passando a AÇÃO ATUAL como 'initial' ─────────────
         from gui.janela_imagem import add_imagem
+        # só encaminha 'initial' se já existir uma imagem configurada
+        ac = bloco.get("acao", {})
         add_imagem(
             actions      = bloco["_img_buffer"],
             update_list  = finish,
             tela         = self.app.root,
-            initial      = bloco.get("acao")  # ← permite pré-visualizar template/área
+            initial      = ac if ac.get("imagem") else None
         )
 
 
@@ -1076,7 +1098,7 @@ class BlocoManager:
                 self.canvas.delete(bloco["label_id"])
             bx, by = bloco["x"], bloco["y"]
             w, h   = bloco["width"], bloco["height"]
-            texto  = f"Label: {ac['name']}"
+            texto  = ac.get("custom_name") or f"Label: {ac['name']}"
             bloco["label_id"] = self.canvas.create_text(
                 bx + w/2, by + h + 8,
                 text=texto, font=("Arial", 9), fill="black"
@@ -1111,10 +1133,10 @@ class BlocoManager:
                 self.canvas.delete(bloco["label_id"])
             bx, by = bloco["x"], bloco["y"]
             w, h = bloco["width"], bloco["height"]
-            if ac["mode"] == "quantidade":
-                txt = f"INÍCIO LOOP {ac['count']}x"
-            else:
-                txt = "INÍCIO LOOP INFINITO"
+            txt = ac.get("name") or ac.get("custom_name") or (
+               f"INÍCIO LOOP {ac['count']}x" if ac["mode"]=="quantidade"
+               else "INÍCIO LOOP INFINITO"
+           )
             bloco["label_id"] = self.canvas.create_text(
                 bx + w/2, by + h + 8,
                 text=txt, font=("Arial", 9), fill="black"
@@ -1157,11 +1179,13 @@ class BlocoManager:
             if bloco.get("label_id"):
                 self.canvas.delete(bloco["label_id"])
 
-            texto_esperado = ac.get("text", "")
-            if ac.get("verificar_vazio"):
-                lbl_txt = "OCR: [vazio]"
+            # respeita nome customizado se fornecido
+            if ac.get("name"):
+                lbl_txt = ac["name"]
             else:
-                lbl_txt = f"OCR: '{texto_esperado}'"
+                texto_esperado = ac.get("text", "")
+                lbl_txt = "OCR: [vazio]" if ac.get("verificar_vazio") \
+                        else f"OCR: '{texto_esperado}'"
 
             bx, by = bloco["x"], bloco["y"]
             w,  h  = bloco["width"], bloco["height"]
@@ -1210,9 +1234,12 @@ class BlocoManager:
             if bloco.get("label_id"):
                 self.canvas.delete(bloco["label_id"])
 
-            cond = ac.get("condicao", "and").upper()
-            texto = (f"OCR Duplo: '{ac.get('text1', '')}' {cond} "
-                     f"'{ac.get('text2', '')}'")
+            # respeita nome customizado se fornecido
+            if ac.get("name"):
+                texto = ac["name"]
+            else:
+                cond = ac.get("condicao", "and").upper()
+                texto = f"OCR Duplo: '{ac.get('text1','')}' {cond} '{ac.get('text2','')}'"
 
             bx, by = bloco["x"], bloco["y"]
             w,  h  = bloco["width"], bloco["height"]
@@ -1249,10 +1276,15 @@ class BlocoManager:
             # desenha preview do texto abaixo do bloco
             bx, by = bloco["x"], bloco["y"]
             w, h   = bloco["width"], bloco["height"]
-            preview = (ac["content"][:18] + "…") if len(ac["content"]) > 20 else ac["content"]
+            # respeita nome customizado se fornecido
+            if ac.get("name"):
+                texto = ac["name"]
+            else:
+                preview = (ac["content"][:18] + "…") if len(ac["content"]) > 20 else ac["content"]
+                texto = f'TXT: "{preview}"'
             bloco["label_id"] = self.canvas.create_text(
                 bx + w/2, by + h + 8,
-                text=f'TXT: "{preview}"',
+                text=texto,
                 font=("Arial", 9), fill="black"
             )
         # chama a janela de texto
@@ -1285,7 +1317,10 @@ class BlocoManager:
                 self.canvas.delete(bloco["label_id"])
 
             # formata texto
-            if ac["mode"] == "whole":
+            # mostrar nome customizado se existir, senão texto padrão
+            if ac.get("name"):
+                txt = ac["name"]
+            elif ac["mode"] == "whole":
                 txt = "Screenshot: tela inteira"
             else:
                 x,y,w,h = ac["region"].values()
@@ -1310,6 +1345,77 @@ class BlocoManager:
             initial     = bloco.get("acao", {})  # pré-preenche se já existia
         )
 
+    def _on_double_click_startthread(self, bloco):
+        # 1) Descobre todos os blocos ligados à saída deste Start Thread
+        conectar_blocos = [
+            destino
+            for seta_id, origem, destino in self.app.setas.setas
+            if origem is bloco
+        ]
+
+        abrir_fork_dialog(
+            parent=self.app.root,
+            bloco=bloco,
+            conectar_ids=conectar_blocos,       # ← agora é lista de dicts de bloco
+            salvar_callback=self._salvar_forks
+        )
+
+
+    def _on_double_click_endthread(self, bloco):
+        atual = bloco.get("acao", {}).get("thread_name", "")
+        nome = simpledialog.askstring(
+            "Nome da Thread (fim)", "Este EndThread corresponde à thread:", initialvalue=atual
+        )
+        if nome is None:
+            return
+        bloco.setdefault("acao", {})["thread_name"] = nome
+
+        # — lá embaixo, desenha o label igual ao Start Thread —
+        # apaga label antigo, se houver
+        if bloco.get("label_id"):
+            self.canvas.delete(bloco["label_id"])
+        bloco["label_id"] = self.canvas.create_text(
+            bloco["x"] + bloco["width"]/2,
+            bloco["y"] + bloco["height"] + 8,
+            text=nome,
+            font=("Arial", 9),
+            fill="blue"
+        )
+    
+    def _salvar_forks(self, bloco_id, thread_name, config):
+        # 1) encontra o bloco
+        bloco = next(b for b in self.blocks if b["id"] == bloco_id)
+
+        # 2) salva o nome da thread e o mapa de forks
+        ac = bloco.setdefault("acao", {})
+        ac["thread_name"] = thread_name
+        ac["forks"]      = config
+
+        # → desenha o rótulo sob o bloco Start Thread
+        # remove label antigo, se existir
+        if bloco.get("label_id"):
+            self.canvas.delete(bloco["label_id"])
+        bx, by = bloco["x"], bloco["y"]
+        w,  h  = bloco["width"], bloco["height"]
+        bloco["label_id"] = self.canvas.create_text(
+            bx + w/2,
+            by + h + 8,
+            text=thread_name,
+            font=("Arial", 9),
+            fill="blue"
+        )
+
+        # 3) redesenha para aplicar estilos nas setas
+        self.app.setas.atualizar_setas()
+        
+    def _salvar_fork_config(self, bloco_id, config):
+        # grava no próprio bloco, por ex:
+        for b in self.blocks:
+            if b["id"] == bloco_id:
+                b.setdefault("acao", {})["forks"] = config
+                break
+        # redesenha setas para aplicar cor nova
+        self.app.setas.atualizar_setas()
 
 
     def _on_canvas_double_click(self, event):
@@ -1344,6 +1450,8 @@ class BlocoManager:
                 "ocr duplo"  : self._on_double_click_ocr_duplo,
                 "texto"      : self._on_double_click_texto,
                 "screenshot" : self._on_double_click_screenshot,
+                "start thread": self._on_double_click_startthread,
+                "end thread"  : self._on_double_click_endthread,
             }
     
             if tipo in mapa:
