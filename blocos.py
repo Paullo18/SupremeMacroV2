@@ -983,8 +983,11 @@ class BlocoManager:
                 self._undo_stack.append(self._snapshot())
                 self._redo_stack.clear()
     
-            # 2) grava a ação de delay e desenha o label
-            ac = bloco["_delay_buffer"][-1]
+            # 2) seleciona AC: ou do buffer (novo) ou do próprio bloco (edição)
+            if bloco["_delay_buffer"]:
+                ac = bloco["_delay_buffer"][-1]       # <— aqui: novo delay
+            else:
+                ac = bloco.get("acao", {})            # <— aqui: edição
             bloco["acao"] = ac
             if bloco.get("label_id"):
                 self.canvas.delete(bloco["label_id"])
@@ -1000,7 +1003,8 @@ class BlocoManager:
         add_delay(
             actions     = bloco["_delay_buffer"],
             update_list = finish,
-            tela        = self.app.root
+            tela        = self.app.root,
+            initial     = bloco.get("acao", {})
         )
 
     def _on_double_click_goto(self, bloco):
@@ -1034,10 +1038,17 @@ class BlocoManager:
             )
             # não é preciso empilhar de novo aqui
         # chama a janela
+        # Primeiro: extrair todas as Labels da macro atual
+        labels_existentes = [
+            bloco["acao"]["name"]
+            for bloco in self.blocks
+            if bloco.get("acao", {}).get("type") == "label" and "name" in bloco.get("acao", {})
+        ]
         add_goto(
             actions     = bloco["_goto_buffer"],
             update_list = finish,
-            tela        = self.app.root
+            tela        = self.app.root,
+            labels_existentes = labels_existentes
         )
 
     def _on_double_click_imagem(self, bloco):
