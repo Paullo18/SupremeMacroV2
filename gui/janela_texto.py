@@ -27,26 +27,42 @@ def add_texto(actions, update_list, tela, listbox=None, *, initial=None):
     frame_btn.pack(pady=(0, 10))
 
     def confirmar(*_):
-        conteudo = texto_var.get()
-        if not conteudo.strip():
+        conteudo = texto_var.get().strip()
+        if not conteudo:
             messagebox.showwarning("Campo vazio", "Digite algum texto antes de confirmar.")
             return
-        ac = {"type": "text", "content": conteudo}
+
         nome = name_var.get().strip()
-        if nome:
-            ac["name"] = nome
-        actions.append(ac)
+        # Se estiver editando (initial existe), atualiza o dicionário e empilha no buffer
+        if initial is not None:
+            initial['content'] = conteudo
+            if nome:
+                initial['name'] = nome
+            else:
+                initial.pop('name', None)
+            actions.append(initial)  # <— aqui!
+        else:
+            ac = {"type": "text", "content": conteudo}
+            if nome:
+                ac["name"] = nome
+            actions.append(ac)
+
+        # Atualiza lista e preview no listbox
         if callable(update_list):
             update_list()
         if listbox is not None:
-            try:
-                preview = (
-                    f'TXT: "{conteudo[:18]}…"' if len(conteudo) > 20
-                    else f'TXT: "{conteudo}"'
-                )
+            preview = (f'TXT: "{conteudo[:18]}…"' if len(conteudo) > 20 else f'TXT: "{conteudo}"')
+            if initial is not None:
+                sel = listbox.curselection()
+                if sel:
+                    idx = sel[0]
+                    listbox.delete(idx)
+                    listbox.insert(idx, preview)
+                else:
+                    listbox.insert(tk.END, preview)
+            else:
                 listbox.insert(tk.END, preview)
-            except Exception:
-                pass
+
         top.destroy()
 
     def cancelar(*_):
@@ -63,7 +79,7 @@ def add_texto(actions, update_list, tela, listbox=None, *, initial=None):
     top.update_idletasks()
     px, py = tela.winfo_rootx(), tela.winfo_rooty()
     pw, ph = tela.winfo_width(), tela.winfo_height()
-    w, h = top.winfo_width(), top.winfo_height()
+    w, h   = top.winfo_width(),  top.winfo_height()
     x = px + (pw - w) // 2
     y = py + (ph - h) // 2
     top.geometry(f"{w}x{h}+{x}+{y}")
