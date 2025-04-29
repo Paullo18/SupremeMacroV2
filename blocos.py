@@ -967,7 +967,8 @@ class BlocoManager:
        add_click(
            actions     = bloco["_click_buffer"],
            update_list = finish,
-           tela        = self.app.root
+           tela        = self.app.root,
+           initial     = bloco.get("acao", {})
        )
 
     def _on_double_click_delay(self, bloco):
