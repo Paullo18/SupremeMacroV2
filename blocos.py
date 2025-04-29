@@ -942,8 +942,11 @@ class BlocoManager:
        # 2) define o callback que será chamado
        #    logo após inserir a ação no buffer
        def finish():
-           # pega a última ação inserida
-           ac = bloco["_click_buffer"][-1]
+           # se o buffer tiver algo, use-o; senão caia em bloco["acao"]
+           if bloco["_click_buffer"]:
+                ac = bloco["_click_buffer"][-1]        # <— aqui: preferir buffer
+           else:
+                ac = bloco.get("acao", {})
            # guarda oficialmente em bloco["acao"]
            bloco["acao"] = ac
            # apaga label antigo, se existir
@@ -952,7 +955,8 @@ class BlocoManager:
            # desenha o texto logo abaixo do bloco
            bx, by = bloco["x"], bloco["y"]
            w, h   = bloco["width"], bloco["height"]
-           texto = ac.get("name") or ac.get("custom_name") or f"Click @({ac['x']},{ac['y']})"
+           # se não tiver name ou custom_name, use o texto padrão
+           texto = ac.get("name") or ac.get("custom_name") or f"Click @({ac.get('x')},{ac.get('y')})"
            label_x = bx + w/2
            label_y = by + h + 8
            bloco["label_id"] = self.canvas.create_text(
