@@ -1418,7 +1418,7 @@ class BlocoManager:
         ac = bloco.setdefault("acao", {})
         ac["thread_name"] = thread_name
         ac["forks"]      = config
-        print(f"[DEBUG][SALVAR FORKS] bloco={bloco_id}, thread_name={thread_name!r}, forks={config}")
+        #print(f"[DEBUG][SALVAR FORKS] bloco={bloco_id}, thread_name={thread_name!r}, forks={config}")
         # → desenha o rótulo sob o bloco Start Thread
         # remove label antigo, se existir
         if bloco.get("label_id"):

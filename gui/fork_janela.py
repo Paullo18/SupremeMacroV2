@@ -158,7 +158,7 @@ def abrir_fork_dialog(parent, bloco, conectar_ids, salvar_callback):
             )
             for dest in conectar_ids
         }
-        print(f"[DEBUG][FORKS CONFIG] thread_name={thread_name_var.get()}, config={config}")
+        #print(f"[DEBUG][FORKS CONFIG] thread_name={thread_name_var.get()}, config={config}")
         salvar_callback(
             bloco_id=bloco["id"],
             thread_name=thread_name_var.get(),

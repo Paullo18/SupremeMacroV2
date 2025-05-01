@@ -114,7 +114,7 @@ def _run_branch(blocks, next_map, json_path, start_block,
     step, total = 0, len(blocks)
     current = start_block
 
-    print(f"[DEBUG] Entrando no _run_branch com thread_name = {thread_name}")
+    #print(f"[DEBUG] Entrando no _run_branch com thread_name = {thread_name}")
 
     # Define explicitamente o nome amigável da thread
     if thread_name is None:
@@ -132,7 +132,7 @@ def _run_branch(blocks, next_map, json_path, start_block,
         bloco = blocks[current]
         ac    = bloco.get("params", {})
         tipo  = ac.get("type", "").lower()
-        print(f"[DEBUG][{disp_name}] Entrou no bloco {current} (tipo={tipo})")
+        #print(f"[DEBUG][{disp_name}] Entrou no bloco {current} (tipo={tipo})")
 
         if tipo == "startthread":
             branches  = ["default", "true", "false"]
@@ -160,7 +160,7 @@ def _run_branch(blocks, next_map, json_path, start_block,
                 display_name = base_name
                 internal_name = f"{base_name}-{dest}"
 
-                print(f"[DEBUG] Iniciando thread '{display_name}' para bloco {dest}")
+                #print(f"[DEBUG] Iniciando thread '{display_name}' para bloco {dest}")
                 th = threading.Thread(
                     target=_run_branch,
                     name=internal_name,
@@ -210,7 +210,7 @@ def _run_branch(blocks, next_map, json_path, start_block,
 
             elif tipo == "delay":
                 ms_total = ac.get("time", 0)
-                print(f"[DEBUG][{disp_name}] Delay de {ms_total} ms")
+                #print(f"[DEBUG][{disp_name}] Delay de {ms_total} ms")
 
                 elapsed = 0
                 step = 50  # checa a cada 50ms
