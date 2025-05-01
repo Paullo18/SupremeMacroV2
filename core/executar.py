@@ -58,13 +58,15 @@ def load_macro_flow(json_path: str):
     """Retorna (blocks_dict, next_map, id_inicial)."""
     with open(json_path, "r", encoding="utf-8") as f:
         data = json.load(f)
+    ids_existentes = [blk["id"] for blk in data.get("blocks", [])]
+    
 
     # blocos por id
     blocks = {blk["id"]: blk for blk in data.get("blocks", [])}
 
     # saídas: agora “true” e “false” são listas
     next_map = {
-        bid: {"default": [], "true": [], "false": []}
+        bid: {"default": [], "true": [], "false": [], "fork": []}
         for bid in blocks
     }
 
@@ -107,32 +109,80 @@ def load_macro_flow(json_path: str):
 # -----------------------------------------------------------
 
 def _run_branch(blocks, next_map, json_path, start_block,
-                progress_callback, label_callback, stop_event=None):
-    step  = 0
-    total = len(blocks)
+                progress_callback, label_callback, stop_event=None,
+                thread_name=None):
+    step, total = 0, len(blocks)
     current = start_block
+
+    #print(f"[DEBUG] Entrando no _run_branch com thread_name = {thread_name}")
+
+    # Define explicitamente o nome amigável da thread
+    if thread_name is None:
+        # Tenta pegar o nome a partir do bloco atual, se for um startthread
+        bloco = blocks.get(start_block, {})
+        tipo = bloco.get("params", {}).get("type", "").lower()
+        if tipo == "startthread":
+            thread_name = bloco.get("params", {}).get("thread_name", f"Thread-{start_block}")
+        else:
+            thread_name = "Thread Principalasdasd"
+
+    disp_name = thread_name
 
     while current is not None:
         bloco = blocks[current]
         ac    = bloco.get("params", {})
         tipo  = ac.get("type", "").lower()
+        #print(f"[DEBUG][{disp_name}] Entrou no bloco {current} (tipo={tipo})")
 
-        # —————— fork default ——————
-        outs = next_map[current]
-        if len(outs["default"]) > 1:
-            # cria UMA thread para cada default e encerra esta instância
-            threads = []
-            for dst in outs["default"]:
-                threads.append(threading.Thread(
+        if tipo == "startthread":
+            branches  = ["default", "true", "false"]
+            raw_forks = ac.get("forks", {})
+            forks     = { int(k): v for k, v in raw_forks.items() }
+            main_dest = None
+            novas_threads = []
+
+            # Classifica destinos: qual será o fluxo principal e quais virarão threads
+            for br in branches:
+                for dest in next_map[current].get(br, []):
+                    escolha = forks.get(dest, "Continuar Fluxo")
+                    if escolha == "Nova Thread":
+                        novas_threads.append(dest)
+                    elif main_dest is None:
+                        main_dest = dest
+
+            # ✅ Continua o fluxo principal primeiro (se existir)
+            current = main_dest
+
+            # ✅ Depois cria as threads paralelas
+            for dest in novas_threads:
+                params_destino = blocks.get(dest, {}).get("params", {})
+                base_name = params_destino.get("thread_name", f"Thread-{dest}")
+                display_name = base_name
+                internal_name = f"{base_name}-{dest}"
+
+                #print(f"[DEBUG] Iniciando thread '{display_name}' para bloco {dest}")
+                th = threading.Thread(
                     target=_run_branch,
-                    args=(blocks, next_map, json_path, dst, progress_callback, label_callback),
+                    name=internal_name,
+                    args=(
+                        blocks, next_map, json_path,
+                        dest,
+                        progress_callback,
+                        label_callback,
+                        stop_event or threading.Event(),
+                        display_name
+                    ),
                     daemon=True
-                ))
-            for t in threads: t.start()
-            for t in threads: t.join()
-            return
+                )
+                th.start()
 
-        # —————— resto do seu laço (será executado quando só houver UMA saída) ——————
+            # ✅ Mesmo se não tiver main_dest, current será None e isso encerra o loop
+            continue
+
+
+
+
+
         if (stop_event and stop_event.is_set()) or macro_parar:
             print("Macro interrompida pelo usuário (Ctrl+Q).")
             break
@@ -141,9 +191,9 @@ def _run_branch(blocks, next_map, json_path, start_block,
 
         step += 1
         if progress_callback:
-            progress_callback(step, total)
+            progress_callback(disp_name, step, total)
         if label_callback:
-            label_callback(f"Executando bloco {current}")
+            label_callback(disp_name, f"Executando bloco {current}")
 
         #bloco = blocks[current]
         #ac = bloco.get("params", {})   # params gravado no JSON
@@ -159,7 +209,20 @@ def _run_branch(blocks, next_map, json_path, start_block,
                 pyautogui.write(texto)
 
             elif tipo == "delay":
-                time.sleep(ac.get("time", 0) / 1000)
+                ms_total = ac.get("time", 0)
+                #print(f"[DEBUG][{disp_name}] Delay de {ms_total} ms")
+
+                elapsed = 0
+                step = 50  # checa a cada 50ms
+                while elapsed < ms_total:
+                    if (stop_event and stop_event.is_set()) or macro_parar:
+                        print(f"[DEBUG][{disp_name}] Delay interrompido por stop")
+                        break
+                    while macro_pausar:
+                        time.sleep(0.1)  # espera pausado
+                    time.sleep(step / 1000)
+                    elapsed += step
+
             
             elif tipo == "goto":
                 alvo = ac.get("label")  # nome do Label para onde voltar
@@ -272,26 +335,13 @@ def _run_branch(blocks, next_map, json_path, start_block,
                 ramo = "true" if resultado else "false"
                 destinos = next_map[current][ramo]
 
-                # —————— fork de true/false ——————
-                if len(destinos) > 1:
-                    threads = []
-                    for dst in destinos:
-                        threads.append(threading.Thread(
-                            target=_run_branch,
-                            args=(blocks, next_map, json_path, dst, progress_callback, label_callback),
-                            daemon=True
-                        ))
-                    for t in threads: t.start()
-                    for t in threads: t.join()
-                    return
-
-                # segue normalmente se tiver só 1 ou 0 destinos naquele ramo
+                # segue primeiro destino de true/false, ou default se não houver
                 if destinos:
                     current = destinos[0]
+                elif next_map[current]["default"]:
+                    current = next_map[current]["default"][0]
                 else:
-                    # fallback → default único
-                    default_outs = next_map[current]["default"]
-                    current = default_outs[0] if default_outs else None
+                    current = None
                 continue
             
             elif tipo == 'screenshot':
@@ -341,10 +391,16 @@ def _run_branch(blocks, next_map, json_path, start_block,
             print(f"Erro no bloco {current}: {exc}")
             traceback.print_exc()
 
-        # -------- fluxo normal --------------------------------------
-        default_outs = next_map[current]["default"]
-        
-        current = default_outs[0] if default_outs else None
+        # -------- fluxo normal – pega primeiro default após executar a ação ----
+        outs = next_map[current]
+        default_outs = next_map[current].get("default", [])
+        if not default_outs:
+            break
+        #next_default = default_outs[0]
+
+        # segue para o próximo bloco automaticamente
+        current = default_outs[0]
+
 def safe_grab(bbox=None):
     with _grab_lock:
         return ImageGrab.grab(bbox=bbox)
@@ -367,6 +423,24 @@ def executar_macro_flow(json_path: str, progress_callback=None,
     global macro_parar, macro_pausar
     macro_parar = macro_pausar = False
     threading.Thread(target=_monitorar_teclas, daemon=True).start()
-    _run_branch(blocks, next_map, json_path, start,
-                progress_callback, label_callback, stop_event)
+
+    # Pegando nome da thread principal a partir do bloco inicial
+    params = blocks[start].get("params", {})
+    main_name = params.get("thread_name", "Thread Principal")
+
+    # Cria a thread principal com nome técnico visível nos logs
+    th = threading.Thread(
+        target=_run_branch,
+        name=main_name,  # nome real da thread no sistema
+        args=(
+            blocks, next_map, json_path, start,
+            progress_callback, label_callback, stop_event,
+            main_name
+        ),
+        daemon=True
+    )
+    th.start()
+    th.join()
+
     print("Execução da macro concluída.")
+

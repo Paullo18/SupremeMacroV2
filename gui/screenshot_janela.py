@@ -28,12 +28,20 @@ def add_screenshot(actions, update_list, tela, *, initial=None):
     # Cria janela filha e esconde antes de posicionar
     win = Toplevel(tela)
     win.withdraw()
+    win.transient(tela)
+    # Campo editável para label customizada do bloco
+    header_frame = Frame(win)
+    header_frame.pack(fill='x', padx=5, pady=5)
+    Label(header_frame, text="Nome do bloco:").pack(side='left')
+    name_var = StringVar(value=initial.get('name','') if initial else '')
+    Entry(header_frame, textvariable=name_var, width=30).pack(side='left', padx=(5,0))
+    # mantém janela oculta até posicionar e renderizar
+    win.attributes('-alpha', 0)    
     win.attributes('-alpha', 0)
     win.title("Adicionar Screenshot")
     # Define tamanho fixo
     win.geometry("800x600")
     # Janela filha modal, sem mostrar até posicionar
-    win.transient(tela)
     # Calcula posição para centralizar
     win.update_idletasks()
     pw = tela.winfo_width(); ph = tela.winfo_height()
@@ -196,6 +204,9 @@ def add_screenshot(actions, update_list, tela, *, initial=None):
             'custom_message_enabled':custom_msg.get(),'custom_message':message_var.get()
         }
         # Substitui qualquer configuração anterior pela nova
+        nome = name_var.get().strip()
+        if nome:
+            cfg['name'] = nome
         actions.clear()
         actions.append(cfg)
         update_list()
