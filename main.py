@@ -495,6 +495,9 @@ class FlowchartApp:
                     #    y + bloco["height"] + 8,
                     #    text=txt, font=("Arial", 9), fill="black"
                     #)
+                if blk.get("type","").lower() == "texto":
+                    params["type"] = "text"
+                blk["params"] = params
 
             # --- recria setas -----------------------------------
             for conn in data.get("connections", []):
