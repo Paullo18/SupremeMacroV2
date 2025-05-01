@@ -132,7 +132,7 @@ def _run_branch(blocks, next_map, json_path, start_block,
         bloco = blocks[current]
         ac    = bloco.get("params", {})
         tipo  = ac.get("type", "").lower()
-        #print(f"[DEBUG][{disp_name}] Entrou no bloco {current} (tipo={tipo})")
+        print(f"[DEBUG][{disp_name}] Entrou no bloco {current} (tipo={tipo}), params={ac}")
 
         if tipo == "startthread":
             branches  = ["default", "true", "false"]
@@ -204,9 +204,12 @@ def _run_branch(blocks, next_map, json_path, start_block,
             if tipo == "click":
                 pyautogui.click(ac["x"], ac["y"])
 
-            elif tipo in ("type", "text"):
-                texto = ac.get("text") or ac.get("content", "")
+            texto = ac.get("text") or ac.get("content", "")
+            if tipo in ("type","text") or (texto and tipo == ""):
+                print(f"[DEBUG][{disp_name}] Escrevendo no bloco {current}: '{texto}'")
+                #time.sleep(1)  # se quiser dar um tempinho pra você focar
                 pyautogui.write(texto)
+                
 
             elif tipo == "delay":
                 ms_total = ac.get("time", 0)
