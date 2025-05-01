@@ -1,38 +1,33 @@
 import tkinter as tk
-from tkinter import ttk, filedialog, messagebox
-from blocos import BlocoManager
-from setas import SetaManager
-from eventos import bind_eventos
-from util import clicou_em_linha
-from PIL import Image, ImageTk
-from core.update_list import update_list
-from core.storage import export_macro_to_tmp, salvar_macro_gui, obter_caminho_macro_atual
-from core.executar import executar_macro_flow
-from gui.macro_status import MacroStatusWindow
-from gui.settings_window import SettingsDialog
 import json, os, shutil, threading
 import core.storage as storage
 
-def macro_em_pasta_macros(path_):
-    """Retorna True se *path_* for .../Macros/<nome>/macro.json."""
-    abs_path   = os.path.abspath(path_)
-    macros_abs = os.path.abspath(storage.MACROS_DIR)
-    return abs_path.endswith(os.sep + "macro.json") and abs_path.startswith(macros_abs + os.sep)
+from tkinter import filedialog, messagebox
+from blocos import BlocoManager
+from setas import SetaManager
+from eventos import bind_eventos
+from PIL import Image, ImageTk
+from core.storage import export_macro_to_tmp
+from core.executar import executar_macro_flow
+from gui.macro_status import MacroStatusWindow
+from gui.settings_window import SettingsDialog
+from utils.widgets import criar_botao
 
-class FlowchartApp:
-    def __init__(self, root):
-        self.root = root
-        self.root.title("TraderAutoSuite v0.6.9")
+
+class FlowchartApp(tk.Tk):
+    def __init__(self):
+        super().__init__()
+        self.title("TraderAutoSuite v0.6.9")
         # ---------------- layout da janela -----------------
         largura_janela, altura_janela = 1400, 700
-        largura_tela  = root.winfo_screenwidth()
-        altura_tela   = root.winfo_screenheight()
+        largura_tela  = self.winfo_screenwidth()
+        altura_tela   = self.winfo_screenheight()
         pos_x = (largura_tela // 2) - (largura_janela // 2)
         pos_y = (altura_tela // 2) - (altura_janela // 2)
-        root.geometry(f"{largura_janela}x{altura_janela}+{pos_x}+{pos_y}")
+        self.geometry(f"{largura_janela}x{altura_janela}+{pos_x}+{pos_y}")
 
         # ————— Barra de Menu —————
-        menubar = tk.Menu(self.root)
+        menubar = tk.Menu(self)
 
         # Arquivo
         arquivo_menu = tk.Menu(menubar, tearoff=0)
@@ -40,7 +35,7 @@ class FlowchartApp:
         arquivo_menu.add_command(label="Abrir...", command=self._acao_carregar)
         arquivo_menu.add_command(label="Salvar", command=self.salvar_arquivo)
         arquivo_menu.add_separator()
-        arquivo_menu.add_command(label="Sair", command=self.root.quit)
+        arquivo_menu.add_command(label="Sair", command=self.quit)
         menubar.add_cascade(label="Arquivo", menu=arquivo_menu)
 
         # Editar
@@ -79,12 +74,12 @@ class FlowchartApp:
         menubar.add_cascade(label="Ajuda", menu=help_menu)
 
         # Associa a barra de menu à janela
-        self.root.config(menu=menubar)
+        self.config(menu=menubar)
 
         # -------- frames e canvas --------------------------
-        self.top_frame   = tk.Frame(root, height=50,  bg="#e0e0e0")
-        self.menu_frame  = tk.Frame(root, width=80,   bg="#f0f0f0")
-        self.canvas      = tk.Canvas(root, bg="#c3cfe2", bd=0, highlightthickness=0)
+        self.top_frame   = tk.Frame(self, height=50,  bg="#e0e0e0")
+        self.menu_frame  = tk.Frame(self, width=80,   bg="#f0f0f0")
+        self.canvas      = tk.Canvas(self, bg="#c3cfe2", bd=0, highlightthickness=0)
         self.top_frame.pack(side="top",   fill="x")
         self.menu_frame.pack(side="left", fill="y")
         self.canvas.pack    (side="right", fill="both", expand=True, padx=6, pady=6)
@@ -113,15 +108,15 @@ class FlowchartApp:
         self.canvas.bind("<B2-Motion>",      self._move_pan)
 
         # ⇢ atalho Ctrl+0  (Windows / Linux / macOS)
-        self.root.bind_all("<Control-Key-0>", self._reset_zoom)
+        self.bind_all("<Control-Key-0>", self._reset_zoom)
 
         # label de status no rodapé
-        self.status_bar = tk.Frame(self.root, bg="#f0f0f0")
+        self.status_bar = tk.Frame(self, bg="#f0f0f0")
         self.status_bar.pack(side="bottom", fill="x")
 
         # label de zoom alinhada à ESQUERDA
         self.status = tk.Label(
-        self.root,
+        self,
         text="Zoom: 100 %",
         bg="#f0f0f0",
         anchor="w"
@@ -137,7 +132,9 @@ class FlowchartApp:
 
         self._criar_botoes_topo()
         self._criar_botoes_menu()
-        bind_eventos(self.canvas, self.blocos, self.setas, self.root)
+        bind_eventos(self.canvas, self.blocos, self.setas, self)
+    def run(self):
+        self.mainloop()
     # Métodos de callback (adicione as implementações que desejar)
     def novo_arquivo(self):          messagebox.showinfo("Novo", "Novo arquivo…")
     def abrir_arquivo(self):        messagebox.showinfo("Abrir", "Abrir arquivo…")
@@ -149,23 +146,10 @@ class FlowchartApp:
     def recortar(self):             pass
     def toggle_toolbar(self):       pass
     def toggle_properties(self):    pass
-
-    def _get_block_label(self, block_id: str) -> str:
-        """
-        Retorna o texto da label do bloco com o id dado.
-        Se não encontrar, retorna o próprio id.
-        """
-        for bloco in self.blocos.blocks:
-            # compara como string para evitar mismatches int vs str
-            if str(bloco.get("id")) == str(block_id):
-                label_id = bloco.get("label_id")
-                if label_id:
-                    return self.canvas.itemcget(label_id, "text")
-        return block_id
     
     def executar_macro(self):
         # 1) minimiza a janela principal
-        self.root.iconify()
+        self.iconify()
 
         # 2) exporta para tmp (mesma lógica de antes)
         tmp_path = export_macro_to_tmp(
@@ -178,8 +162,8 @@ class FlowchartApp:
 
         # 3) dispara a thread que chama o core com callbacks para UI
         status_win = MacroStatusWindow(
-            master=self.root,
-            on_close=self.root.deiconify
+            master=self,
+            on_close=self.deiconify
         )
         self.macro_thread = threading.Thread(
             target=self._run_with_ui,
@@ -198,7 +182,7 @@ class FlowchartApp:
             if blk.get('params', {}).get('type') == 'startthread'
         ]
 
-        self.root.withdraw()  # minimiza janela principal
+        self.withdraw()  # minimiza janela principal
 
         stop_evt = threading.Event()
 
@@ -236,13 +220,13 @@ class FlowchartApp:
         )
 
         status_win.win.after(0, status_win.win.destroy)
-        self.root.after(0, self.root.deiconify)
+        self(0, self.deiconify)
 
     
 
     def parar_macro(self):          pass
     def abrir_configuracoes(self):
-        dialog = SettingsDialog(self.root)
+        dialog = SettingsDialog(self)
         dialog.wait_window()
     def testar_ocr(self):           pass
     def abrir_documentacao(self):   pass
@@ -259,16 +243,15 @@ class FlowchartApp:
             ("Executar",  "execute_icon.png"),
         ]
         for nome, arquivo in botoes_topo:
-            caminho = os.path.join("icons", arquivo)
-            if os.path.exists(caminho):
-                img = Image.open(caminho).resize((112, 40), Image.Resampling.LANCZOS)
-                tk_img = ImageTk.PhotoImage(img)
-                self.icones_topo[nome] = tk_img
-                btn = tk.Label(self.top_frame, image=tk_img, cursor="hand2", bg="#e0e0e0")
-                btn.pack(side="left", padx=5, pady=5)
-                btn.bind("<Button-1>", lambda e, n=nome: self.executar_acao_topo(n))
-            else:
-                print(f"[Aviso] Ícone '{arquivo}' não encontrado.")
+            criar_botao(
+                parent=self.top_frame,
+                img_file=arquivo,
+                callback=lambda e, n=nome: self.executar_acao_topo(n),
+                bg="#e0e0e0",
+                store_dict=self.icones_topo,
+                key=nome,
+                side="left",          # ← faz empilhar lado a lado
+            )
 
     def _criar_botoes_menu(self):
         botoes_icone = [
@@ -286,16 +269,17 @@ class FlowchartApp:
             ("End Thread",  "threadend_icon.png"),
         ]
         for nome, arquivo in botoes_icone:
-            caminho = os.path.join("icons", arquivo)
-            if os.path.exists(caminho):
-                img = Image.open(caminho).resize((112, 40), Image.Resampling.LANCZOS)
-                tk_img = ImageTk.PhotoImage(img)
-                self.icones_menu[nome] = tk_img
-                btn = tk.Label(self.menu_frame, image=tk_img, cursor="hand2", bg="#f0f0f0")
-                btn.pack(pady=5, padx=5)
-                btn.bind("<Button-1>", lambda e, n=nome: self.blocos.adicionar_bloco(n, "white"))
-            else:
-                print(f"[Aviso] Ícone '{arquivo}' não encontrado.")
+            criar_botao(
+                parent=self.menu_frame,
+                img_file=arquivo,
+                callback=lambda e, n=nome: self.blocos.adicionar_bloco(n, "white"),
+                bg="#f0f0f0",
+                pack_opts=dict(pady=5, padx=5),
+                store_dict=self.icones_menu,
+                key=nome,
+            )
+
+        # Botão de conectar (permanece como label de texto)
         # botão de conectar
         btn_conectar = tk.Label(self.menu_frame, text="➕", bg="#ddd", width=5,
                                 relief="raised", bd=2, cursor="hand2")
@@ -331,7 +315,7 @@ class FlowchartApp:
             self.canvas.delete("all")
             self.blocos = BlocoManager(self.canvas, self)
             self.setas  = SetaManager(self.canvas, self.blocos)
-            bind_eventos(self.canvas, self.blocos, self.setas, self.root)
+            bind_eventos(self.canvas, self.blocos, self.setas, self)
             storage.caminho_macro_real  = None     # zera ponteiro fixo
             storage.caminho_arquivo_tmp = None
             return
@@ -412,7 +396,7 @@ class FlowchartApp:
             self.canvas.delete("all")
             self.blocos = BlocoManager(self.canvas, self)
             self.setas  = SetaManager(self.canvas, self.blocos)
-            bind_eventos(self.canvas, self.blocos, self.setas, self.root)
+            bind_eventos(self.canvas, self.blocos, self.setas, self)
 
             # --- recria blocos ----------------------------------
             id_map = {}
@@ -630,11 +614,3 @@ class FlowchartApp:
     def _update_status(self):
         pct = int(round(self._zoom_scale * 100))
         self.status.config(text=f"{pct} %")
-
-# ============================================================
-# Inicialização
-# ============================================================
-if __name__ == "__main__":
-    root = tk.Tk()
-    app = FlowchartApp(root)
-    root.mainloop()

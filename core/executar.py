@@ -8,10 +8,9 @@ import numpy as np
 import keyboard
 import pyautogui
 import pytesseract
-from PIL import ImageGrab, Image
+from PIL import ImageGrab
 import io
 import win32clipboard
-import requests
 from datetime import datetime
 from utils.telegram_util import send_photo
 

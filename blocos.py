@@ -17,6 +17,7 @@ from core.update_list import update_list
 import threading, time, pyautogui, keyboard
 from tkinter import Toplevel, IntVar, Label, Entry, simpledialog
 import pytesseract
+from pathlib import Path
 
 
 class BlocoManager:
@@ -119,25 +120,41 @@ class BlocoManager:
         # --------------------------------------------------
         # 4) ícone
         # --------------------------------------------------
-        caminho_icone = os.path.join("icons", self._mapear_nome_para_icone(nome))
+        ICON_DIR = Path(__file__).resolve().parents[1]  / "SupremeMacroV2" / "assets" / "icons"
+        caminho_icone = ICON_DIR / self._mapear_nome_para_icone(nome)
         if os.path.exists(caminho_icone):
-            pil_icon = Image.open(caminho_icone)          # PIL.Image 1×
-            tk_size  = (z(self.block_width), z(self.block_height))
-            tk_img   = ImageTk.PhotoImage(pil_icon.resize(tk_size, Image.LANCZOS))
+            pil_icon = Image.open(caminho_icone)
+        else:
+            # cria imagem transparente de placeholder
+            print(f"[Aviso] Ícone '{caminho_icone}' não encontrado. Usando placeholder.")
+            pil_icon = Image.new("RGBA", (self.block_width, self.block_height), (255, 255, 255, 0))
+
+        # Em ambos os casos geramos tk_img para `_icon_ref`
+        tk_size  = (z(self.block_width), z(self.block_height))
+        tk_img   = ImageTk.PhotoImage(pil_icon.resize(tk_size, Image.LANCZOS))
+
+        # se era ícone real, coloca na tela; senão, deixa sem imagem
+        if os.path.exists(caminho_icone):
             icon = self.canvas.create_image(x, y, anchor="nw", image=tk_img)
-            bloco_icon_data = {
-                "_pil_orig":   pil_icon.copy(),
-                "_icon_scale": self.app._zoom_scale,
-                "_icon_ref":   tk_img,
-            }
         else:
             icon = None
-            bloco_icon_data = {}
+
+        bloco_icon_data = {
+            "_pil_orig":   pil_icon.copy(),
+            "_icon_scale": self.app._zoom_scale,
+            "_icon_ref":   tk_img,
+        }
 
         # --------------------------------------------------
         # 5) dicionário do bloco
         # --------------------------------------------------
-        pil_base = pil_icon.resize((self.block_width, self.block_height), Image.LANCZOS)
+        try:
+            pil_base = pil_icon.resize((self.block_width, self.block_height), Image.LANCZOS)
+        except UnboundLocalError:
+            # Ícone não carregado – cria bloco branco padrão
+            print(f"[Aviso] Ícone para bloco '{nome}' não encontrado. Usando placeholder.")
+            pil_icon = Image.new("RGBA", (self.block_width, self.block_height), (255, 255, 255, 0))
+            pil_base = pil_icon
         # define ação para Start/End Thread
         acao = {}
         lt = nome.strip().lower()
@@ -303,6 +320,7 @@ class BlocoManager:
         
 
     def _mapear_nome_para_icone(self, nome):
+        print("[DEBUG] mapeando:", repr(nome))
         mapa = {
             "clique": "click_icon.png",
             "texto": "text_icon.png",
