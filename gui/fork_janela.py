@@ -12,6 +12,10 @@ def abrir_fork_dialog(parent, bloco, conectar_ids, salvar_callback):
     dlg = tk.Toplevel(parent)
     dlg.title("Configurar Forks")
     dlg.transient(parent)
+    dlg.geometry("500x400")        # Tamanho inicial fixo
+    dlg.resizable(False, False)    # Não redimensionável
+    dlg.grab_set()                 # Foco modal na janela
+    dlg.focus_force()              # Traz a janela para frente
 
     # --- Nome da Thread ---------------------------------------------
     tk.Label(dlg, text="Nome da Thread:").grid(
@@ -20,14 +24,15 @@ def abrir_fork_dialog(parent, bloco, conectar_ids, salvar_callback):
     thread_name_var = tk.StringVar(
         value=bloco.get("acao", {}).get("thread_name", "")
     )
-    tk.Entry(dlg, textvariable=thread_name_var, width=30).grid(
-        row=0, column=1, padx=5, pady=5
+    dlg.columnconfigure(1, weight=1)
+    tk.Entry(dlg, textvariable=thread_name_var).grid(
+        row=0, column=1, padx=5, pady=5, sticky="we"
     )
 
     # --- Recupera seleção anterior de forks -------------------------
     previous = bloco.get("acao", {}).get("forks", {})
     try:
-        initial = next(k for k, v in previous.items() if v == "Nova Thread")
+        initial = next(k for k, v in previous.items() if v == "Continuar Fluxo")
     except StopIteration:
         initial = -1
 
@@ -148,11 +153,12 @@ def abrir_fork_dialog(parent, bloco, conectar_ids, salvar_callback):
             return
         config = {
             dest["id"]: (
-                "Nova Thread" if dest["id"] == sel
-                else "Continuar Fluxo"
+                "Continuar Fluxo" if dest["id"] == sel
+                else "Nova Thread"
             )
             for dest in conectar_ids
         }
+        print(f"[DEBUG][FORKS CONFIG] thread_name={thread_name_var.get()}, config={config}")
         salvar_callback(
             bloco_id=bloco["id"],
             thread_name=thread_name_var.get(),
@@ -161,7 +167,7 @@ def abrir_fork_dialog(parent, bloco, conectar_ids, salvar_callback):
         dlg.destroy()
 
     btns = tk.Frame(dlg)
-    btns.grid(row=4, column=0, columnspan=2, pady=10)
+    btns.grid(row=4, column=0, columnspan=2, pady=10, sticky="e", padx=10)
     tk.Button(btns, text="OK", width=10, command=on_ok).pack(side="left", padx=5)
     tk.Button(btns, text="Cancelar", width=10, command=dlg.destroy).pack(side="left")
 

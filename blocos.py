@@ -673,15 +673,26 @@ class BlocoManager:
                     txt = f"OCR Duplo: '{acao['text1']}' {cond} '{acao['text2']}'"
                 elif tipo == "text":
                     txt = f'TXT: "{acao["content"][:18]}…"' if len(acao["content"])>20 else f'TXT: "{acao["content"]}"'
+                elif tipo == "startthread":
+                    txt = acao.get("thread_name", "Thread")
+                elif tipo == "screenshot":
+                    if acao.get("name"):
+                        txt = acao["name"]
+                    elif acao.get("mode") == "whole":
+                        txt = "Screenshot: tela inteira"
+                    else:
+                        x, y, w, h = acao['region'].values()
+                        txt = f"Screenshot: reg ({x},{y},{w}×{h})"
                 
                 else:
                     txt = tipo.upper()
+                cor_label = "blue" if tipo == "startthread" else "black"
                 novo["label_id"] = self.canvas.create_text(
                     x + novo["width"]/2,
                     y + novo["height"] + 8,
                     text=txt,
                     font=("Arial", 9),
-                    fill="black"
+                    fill=cor_label
                 )
 
         # 4) Recria todas as setas entre blocos
@@ -1407,7 +1418,7 @@ class BlocoManager:
         ac = bloco.setdefault("acao", {})
         ac["thread_name"] = thread_name
         ac["forks"]      = config
-
+        print(f"[DEBUG][SALVAR FORKS] bloco={bloco_id}, thread_name={thread_name!r}, forks={config}")
         # → desenha o rótulo sob o bloco Start Thread
         # remove label antigo, se existir
         if bloco.get("label_id"):

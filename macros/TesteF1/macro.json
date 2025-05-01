@@ -1,0 +1,661 @@
+{
+  "macro_name": "TesteF1",
+  "blocks": [
+    {
+      "id": 47,
+      "type": "Start Thread",
+      "params": {
+        "type": "startthread",
+        "thread_name": "ChecaSinal",
+        "forks": {
+          "49": "Continuar Fluxo",
+          "48": "Nova Thread"
+        }
+      },
+      "x": 29.0,
+      "y": 262.0
+    },
+    {
+      "id": 48,
+      "type": "Start Thread",
+      "params": {
+        "type": "startthread",
+        "thread_name": "AtualizaChart",
+        "forks": {
+          "53": "Continuar Fluxo"
+        }
+      },
+      "x": 29.0,
+      "y": 152.0
+    },
+    {
+      "id": 49,
+      "type": "OCR",
+      "params": {
+        "type": "ocr",
+        "x": 901,
+        "y": 329,
+        "w": 122,
+        "h": 80,
+        "text": "Open",
+        "verificar_vazio": false,
+        "name": "ChecaSinal"
+      },
+      "x": 225.0,
+      "y": 262.0
+    },
+    {
+      "id": 50,
+      "type": "Clique",
+      "params": {
+        "type": "click",
+        "x": 806,
+        "y": 258,
+        "name": "Clica no Campo de Quantidade"
+      },
+      "x": 377.0,
+      "y": 262.0
+    },
+    {
+      "id": 51,
+      "type": "GoTo",
+      "params": {
+        "type": "goto",
+        "label": "ChecaSinal",
+        "name": "ChecaSinal"
+      },
+      "x": 225.0,
+      "y": 347.0
+    },
+    {
+      "id": 52,
+      "type": "Label",
+      "params": {
+        "type": "label",
+        "name": "ChecaSinal"
+      },
+      "x": 27.0,
+      "y": 343.0
+    },
+    {
+      "id": 53,
+      "type": "Label",
+      "params": {
+        "type": "label",
+        "name": "AtualizaChart"
+      },
+      "x": 220.0,
+      "y": 152.0
+    },
+    {
+      "id": 55,
+      "type": "GoTo",
+      "params": {
+        "type": "goto",
+        "label": "AtualizaChart",
+        "name": "AtualizaChart"
+      },
+      "x": 694.0,
+      "y": 152.0
+    },
+    {
+      "id": 56,
+      "type": "Delay",
+      "params": {
+        "type": "delay",
+        "time": 3600000,
+        "ms": 0,
+        "ms2": 0,
+        "name": "1 Hora"
+      },
+      "x": 537.0,
+      "y": 152.0
+    },
+    {
+      "id": 67,
+      "type": "Texto",
+      "params": {
+        "content": "10000",
+        "name": "Digita Valor do Trade"
+      },
+      "x": 538.0,
+      "y": 262.0
+    },
+    {
+      "id": 68,
+      "type": "OCR",
+      "params": {
+        "type": "ocr",
+        "x": 1173,
+        "y": 345,
+        "w": 95,
+        "h": 53,
+        "text": "Long",
+        "verificar_vazio": false,
+        "name": "ChecaOpen"
+      },
+      "x": 693.0,
+      "y": 262.0
+    },
+    {
+      "id": 69,
+      "type": "Clique",
+      "params": {
+        "type": "click",
+        "x": 1179,
+        "y": 1414,
+        "name": "AbreLong"
+      },
+      "x": 837.0,
+      "y": 212.0
+    },
+    {
+      "id": 70,
+      "type": "Clique",
+      "params": {
+        "type": "click",
+        "x": 1281,
+        "y": 1418,
+        "name": "AbreShort"
+      },
+      "x": 837.0,
+      "y": 305.0
+    },
+    {
+      "id": 71,
+      "type": "Label",
+      "params": {
+        "type": "label",
+        "name": "ChecaStopL"
+      },
+      "x": 982.0,
+      "y": 96.0
+    },
+    {
+      "id": 72,
+      "type": "Label",
+      "params": {
+        "type": "label",
+        "name": "ChecaStopS"
+      },
+      "x": 983.0,
+      "y": 423.0
+    },
+    {
+      "id": 73,
+      "type": "OCR",
+      "params": {
+        "type": "ocr",
+        "x": 914,
+        "y": 335,
+        "w": 105,
+        "h": 73,
+        "text": "Stop",
+        "verificar_vazio": false,
+        "name": "ChegaStop"
+      },
+      "x": 1179.0,
+      "y": 423.0
+    },
+    {
+      "id": 74,
+      "type": "OCR",
+      "params": {
+        "type": "ocr",
+        "x": 916,
+        "y": 338,
+        "w": 99,
+        "h": 66,
+        "text": "Stop",
+        "verificar_vazio": false,
+        "name": "ChecaStop"
+      },
+      "x": 1167.0,
+      "y": 96.0
+    },
+    {
+      "id": 76,
+      "type": "Screenshot",
+      "params": {},
+      "x": 541.0,
+      "y": 352.0
+    },
+    {
+      "id": 77,
+      "type": "Label",
+      "params": {
+        "type": "label",
+        "name": "UpdateTrade"
+      },
+      "x": 391.0,
+      "y": 352.0
+    },
+    {
+      "id": 78,
+      "type": "Delay",
+      "params": {
+        "type": "delay",
+        "time": 600000,
+        "ms": 0,
+        "ms2": 0,
+        "name": "10 Minutos"
+      },
+      "x": 391.0,
+      "y": 436.0
+    },
+    {
+      "id": 79,
+      "type": "Screenshot",
+      "params": {},
+      "x": 230.0,
+      "y": 436.0
+    },
+    {
+      "id": 80,
+      "type": "GoTo",
+      "params": {
+        "type": "goto",
+        "label": "UpdateTrade",
+        "name": "UpdateTrade"
+      },
+      "x": 32.0,
+      "y": 436.0
+    },
+    {
+      "id": 81,
+      "type": "Label",
+      "params": {
+        "type": "label",
+        "name": "FecharTrade"
+      },
+      "x": 990.0,
+      "y": 500.0
+    },
+    {
+      "id": 82,
+      "type": "Clique",
+      "params": {
+        "type": "click",
+        "x": 0,
+        "y": 0,
+        "name": "FechaTrade"
+      },
+      "x": 702.0,
+      "y": 500.0
+    },
+    {
+      "id": 83,
+      "type": "Screenshot",
+      "params": {},
+      "x": 845.0,
+      "y": 422.0
+    },
+    {
+      "id": 84,
+      "type": "Delay",
+      "params": {
+        "type": "delay",
+        "time": 1000,
+        "ms": 0,
+        "ms2": 0
+      },
+      "x": 546.0,
+      "y": 500.0
+    },
+    {
+      "id": 85,
+      "type": "Clique",
+      "params": {
+        "type": "click",
+        "x": 867,
+        "y": 263,
+        "name": "ReforçaFechamento"
+      },
+      "x": 388.0,
+      "y": 500.0
+    },
+    {
+      "id": 86,
+      "type": "GoTo",
+      "params": {
+        "type": "goto",
+        "label": "ChecaSinal",
+        "name": "ChecaSinal"
+      },
+      "x": 232.0,
+      "y": 500.0
+    },
+    {
+      "id": 87,
+      "type": "GoTo",
+      "params": {
+        "type": "goto",
+        "label": "ChecaStopL",
+        "name": "ChecaStopL"
+      },
+      "x": 1231.0,
+      "y": 178.0
+    },
+    {
+      "id": 88,
+      "type": "GoTo",
+      "params": {
+        "type": "goto",
+        "label": "FecharTrade",
+        "name": "FecharTrade"
+      },
+      "x": 1112.0,
+      "y": 177.0
+    },
+    {
+      "id": 89,
+      "type": "GoTo",
+      "params": {
+        "type": "goto",
+        "label": "ChecaStopS",
+        "name": "ChecaStopS"
+      },
+      "x": 1234.0,
+      "y": 349.0
+    },
+    {
+      "id": 90,
+      "type": "GoTo",
+      "params": {
+        "type": "goto",
+        "label": "FecharTrade",
+        "name": "FecharTrade"
+      },
+      "x": 1114.0,
+      "y": 349.0
+    },
+    {
+      "id": 92,
+      "type": "Start Thread",
+      "params": {
+        "type": "startthread",
+        "thread_name": "FechaTrade",
+        "forks": {
+          "82": "Continuar Fluxo",
+          "83": "Nova Thread"
+        }
+      },
+      "x": 845.0,
+      "y": 500.0
+    },
+    {
+      "id": 93,
+      "type": "Start Thread",
+      "params": {
+        "type": "startthread",
+        "thread_name": "FechaLong",
+        "forks": {
+          "71": "Continuar Fluxo",
+          "95": "Nova Thread"
+        }
+      },
+      "x": 982.0,
+      "y": 212.0
+    },
+    {
+      "id": 94,
+      "type": "Start Thread",
+      "params": {
+        "type": "startthread",
+        "thread_name": "FechaShort",
+        "forks": {
+          "72": "Continuar Fluxo",
+          "95": "Nova Thread"
+        }
+      },
+      "x": 983.0,
+      "y": 305.0
+    },
+    {
+      "id": 95,
+      "type": "GoTo",
+      "params": {
+        "type": "goto",
+        "label": "UpdateTrade",
+        "name": "UpdateTrade"
+      },
+      "x": 1173.0,
+      "y": 260.0
+    },
+    {
+      "id": 96,
+      "type": "Label",
+      "params": {
+        "type": "label",
+        "name": "UpdateTrade"
+      },
+      "x": 699.0,
+      "y": 352.0
+    },
+    {
+      "id": 98,
+      "type": "Screenshot",
+      "params": {},
+      "x": 378.0,
+      "y": 152.0
+    }
+  ],
+  "connections": [
+    {
+      "from": 47,
+      "to": 49,
+      "branch": null,
+      "color": "#000"
+    },
+    {
+      "from": 47,
+      "to": 48,
+      "branch": null,
+      "color": "#0a84ff"
+    },
+    {
+      "from": 52,
+      "to": 49,
+      "branch": null,
+      "color": "#000"
+    },
+    {
+      "from": 48,
+      "to": 53,
+      "branch": null,
+      "color": "#000"
+    },
+    {
+      "from": 56,
+      "to": 55,
+      "branch": null,
+      "color": "#000"
+    },
+    {
+      "from": 50,
+      "to": 67,
+      "branch": null,
+      "color": "#000"
+    },
+    {
+      "from": 67,
+      "to": 68,
+      "branch": null,
+      "color": "#000"
+    },
+    {
+      "from": 76,
+      "to": 77,
+      "branch": null,
+      "color": "#000"
+    },
+    {
+      "from": 77,
+      "to": 78,
+      "branch": null,
+      "color": "#000"
+    },
+    {
+      "from": 78,
+      "to": 79,
+      "branch": null,
+      "color": "#000"
+    },
+    {
+      "from": 79,
+      "to": 80,
+      "branch": null,
+      "color": "#000"
+    },
+    {
+      "from": 82,
+      "to": 84,
+      "branch": null,
+      "color": "#000"
+    },
+    {
+      "from": 84,
+      "to": 85,
+      "branch": null,
+      "color": "#000"
+    },
+    {
+      "from": 85,
+      "to": 86,
+      "branch": null,
+      "color": "#000"
+    },
+    {
+      "from": 71,
+      "to": 74,
+      "branch": null,
+      "color": "#000"
+    },
+    {
+      "from": 92,
+      "to": 82,
+      "branch": null,
+      "color": "#000"
+    },
+    {
+      "from": 81,
+      "to": 92,
+      "branch": null,
+      "color": "#000"
+    },
+    {
+      "from": 92,
+      "to": 83,
+      "branch": null,
+      "color": "#0a84ff"
+    },
+    {
+      "from": 72,
+      "to": 73,
+      "branch": null,
+      "color": "#000"
+    },
+    {
+      "from": 69,
+      "to": 93,
+      "branch": null,
+      "color": "#000"
+    },
+    {
+      "from": 70,
+      "to": 94,
+      "branch": null,
+      "color": "#000"
+    },
+    {
+      "from": 93,
+      "to": 71,
+      "branch": null,
+      "color": "#000"
+    },
+    {
+      "from": 94,
+      "to": 72,
+      "branch": null,
+      "color": "#000"
+    },
+    {
+      "from": 96,
+      "to": 76,
+      "branch": null,
+      "color": "#000"
+    },
+    {
+      "from": 93,
+      "to": 95,
+      "branch": null,
+      "color": "#0a84ff"
+    },
+    {
+      "from": 94,
+      "to": 95,
+      "branch": null,
+      "color": "#0a84ff"
+    },
+    {
+      "from": 49,
+      "to": 50,
+      "branch": null,
+      "color": "#000"
+    },
+    {
+      "from": 68,
+      "to": 69,
+      "branch": null,
+      "color": "#000"
+    },
+    {
+      "from": 73,
+      "to": 90,
+      "branch": null,
+      "color": "#000"
+    },
+    {
+      "from": 74,
+      "to": 87,
+      "branch": null,
+      "color": "#000"
+    },
+    {
+      "from": 73,
+      "to": 89,
+      "branch": null,
+      "color": "#000"
+    },
+    {
+      "from": 68,
+      "to": 70,
+      "branch": null,
+      "color": "#000"
+    },
+    {
+      "from": 49,
+      "to": 51,
+      "branch": null,
+      "color": "#000"
+    },
+    {
+      "from": 74,
+      "to": 88,
+      "branch": null,
+      "color": "#000"
+    },
+    {
+      "from": 53,
+      "to": 98,
+      "branch": null,
+      "color": "#000"
+    },
+    {
+      "from": 98,
+      "to": 56,
+      "branch": null,
+      "color": "#000"
+    }
+  ]
+}

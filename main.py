@@ -22,7 +22,7 @@ def macro_em_pasta_macros(path_):
 class FlowchartApp:
     def __init__(self, root):
         self.root = root
-        self.root.title("TraderAutoSuite v0.6")
+        self.root.title("TraderAutoSuite v0.6.9")
         # ---------------- layout da janela -----------------
         largura_janela, altura_janela = 1400, 700
         largura_tela  = root.winfo_screenwidth()
@@ -176,63 +176,68 @@ class FlowchartApp:
             ) if storage.caminho_macro_real else None)
         )
 
-        # 3) instancia a janela de status
+        # 3) dispara a thread que chama o core com callbacks para UI
         status_win = MacroStatusWindow(
             master=self.root,
             on_close=self.root.deiconify
         )
-
-        # 4) dispara a thread que chama o core com callbacks para UI
         self.macro_thread = threading.Thread(
-            target=lambda: self._run_with_ui(tmp_path, status_win),
+            target=self._run_with_ui,
+            args=(tmp_path, status_win),
             daemon=True
         )
         self.macro_thread.start()
 
     def _run_with_ui(self, json_path: str, status_win: MacroStatusWindow):
-    
-        # cria evento de stop para esta thread
+        # Load JSON and extract thread names
+        with open(json_path, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+        thread_names = [
+            blk['params']['thread_name']
+            for blk in data.get('blocks', [])
+            if blk.get('params', {}).get('type') == 'startthread'
+        ]
+
+        self.root.withdraw()  # minimiza janela principal
+
         stop_evt = threading.Event()
-        # registra no status window para o botão individual
-        status_win.register_stop_event(threading.current_thread().name, stop_evt)
-        # callback de progresso: repassa ao status window com nome da thread
-        def progress_cb(step, total):
-            name = threading.current_thread().name
+
+        def progress_cb(name, step, total):
             status_win.update_progress(name, step, total)
-    
-        # callback de bloco: filtra por tipos e envia label com nome da thread
-        def label_cb(raw_text: str):
-            name = threading.current_thread().name
-            # raw_text esperado: "Executando bloco <id>"
-            block_id = raw_text.rsplit(" ", 1)[-1]
-            for bloco in self.blocos.blocks:
-                if str(bloco.get("id")) == block_id:
-                    tipo = str(bloco.get("acao", {}).get("type", "")).lower()
-                    if tipo in ("ocr", "ocr_duplo", "screenshot", "click", "text", "delay", "imagem"):
-                        label_id = bloco.get("label_id")
-                        if label_id:
-                            label = self.canvas.itemcget(label_id, "text")
-                        else:
-                            label = block_id
-                        # aqui passa o name para atualizar o widget certo
-                        status_win.update_block(name, label)
-                    break
-        print([t.name for t in threading.enumerate()])
-                
-        # chama o executor com stop_event específico
+
+        def label_cb(name, raw_text):
+            block_id = raw_text.rsplit(' ', 1)[-1]
+            bloco = next((blk for blk in self.blocos.blocks if str(blk["id"]) == str(block_id)), None)
+            if bloco:
+                acao = bloco.get('acao', {})
+                tipo = acao.get('type', '').lower()
+
+                # Gera um nome mais descritivo do bloco
+                if tipo == 'click':
+                    desc = f"Clique @({acao.get('x')}, {acao.get('y')})"
+                elif tipo == 'delay':
+                    tempo = acao.get('time', 0)
+                    desc = f"Delay de {tempo // 1000}s"
+                elif tipo == 'startthread':
+                    desc = f"Thread → {acao.get('thread_name', f'ID {block_id}')}"
+                else:
+                    desc = tipo.capitalize()
+
+                status_win.update_block(name, desc)
+            else:
+                status_win.update_block(name, f"Bloco {block_id} (não encontrado)")
+
+        # Execute macro e depois destrói a janela de status
         executar_macro_flow(
             json_path,
             progress_callback=progress_cb,
             label_callback=label_cb,
             stop_event=stop_evt
         )
-    
-        # ao terminar, fecha a janela de status e restaura a principal
-        try:
-            status_win.win.destroy()
-        except:
-            pass
-        self.root.deiconify()
+
+        status_win.win.after(0, status_win.win.destroy)
+        self.root.after(0, self.root.deiconify)
+
     
 
     def parar_macro(self):          pass
@@ -398,6 +403,9 @@ class FlowchartApp:
         try:
             with open(path, "r", encoding="utf-8") as f:
                 data = json.load(f)
+            ids_existentes = [blk["id"] for blk in data.get("blocks", [])]
+            BlocoManager._next_id = max(ids_existentes, default=0) + 1
+
             storage.caminho_arquivo_tmp = path
             storage.caminho_macro_real = path
             # limpa canvas e recria managers
@@ -461,30 +469,32 @@ class FlowchartApp:
                     elif tipo == "text":
                         conteudo = params.get('content', params.get('text', ''))
                         txt = f"TXT: '{conteudo[:18]}…'" if len(conteudo) > 20 else f"TXT: '{conteudo}'"
+                    elif tipo == "startthread":
+                        txt = params.get('thread_name')
                     elif tipo == "screenshot":
-                        # Desenha rótulo de screenshot
-                        if bloco.get("label_id"): self.canvas.delete(bloco["label_id"])
-                        bx, by = params.get("x",0), params.get("y",0)
-                        w0, h0 = bloco["width"], bloco["height"]
-                        if params.get("mode") == "whole":
-                            texto = "Screenshot: tela inteira"
+                        if params.get("name"):
+                            txt = params["name"]
+                        elif params.get("mode") == "whole":
+                            txt = "Screenshot: tela inteira"
                         else:
                             r = params.get("region", {})
-                            texto = f"Screenshot: reg ({r['x']},{r['y']},{r['w']}×{r['h']})"
-                        bloco["label_id"] = self.canvas.create_text(
-                            bx + w0/2,
-                            by + h0 + 8,
-                            text=texto,
-                            font=("Arial", 9),
-                            fill="black"
-                        )
+                            txt = f"Screenshot: reg ({r['x']},{r['y']},{r['w']}×{r['h']})"
                     else:
                         txt = tipo.upper()
+
+                    cor_label = "blue" if tipo == "startthread" else "black"
                     bloco["label_id"] = self.canvas.create_text(
-                        x + bloco["width"] / 2,
-                        y + bloco["height"] + 8,
-                        text=txt, font=("Arial", 9), fill="black"
+                    x + bloco["width"]/2,
+                    y + bloco["height"] + 8,
+                    text=txt,
+                    font=("Arial", 9),
+                    fill=cor_label
                     )
+                    #bloco["label_id"] = self.canvas.create_text(
+                    #    x + bloco["width"] / 2,
+                    #    y + bloco["height"] + 8,
+                    #    text=txt, font=("Arial", 9), fill="black"
+                    #)
 
             # --- recria setas -----------------------------------
             for conn in data.get("connections", []):
