@@ -212,19 +212,42 @@ def _run_branch(blocks, next_map, json_path, start_block,
                 
 
             elif tipo == "delay":
-                ms_total = ac.get("time", 0)
-                #print(f"[DEBUG][{disp_name}] Delay de {ms_total} ms")
-
-                elapsed = 0
-                step = 50  # checa a cada 50ms
-                while elapsed < ms_total:
-                    if (stop_event and stop_event.is_set()) or macro_parar:
+                ms_total   = ac.get("time", 0)
+                deadline   = time.monotonic() + ms_total / 1000.0   # instante-fim
+                base_step  = step - 1        # blocos que já terminaram
+                last_sent  = 0.0             # último progresso despachado (0-1)
+            
+                while True:
+                    restante = deadline - time.monotonic()
+                    if restante <= 0:
+                        break                    # tempo cumprido
+                    
+                    # –– interrupções ––
+                    if macro_parar or (stop_event and stop_event.is_set()):
                         print(f"[DEBUG][{disp_name}] Delay interrompido por stop")
                         break
-                    while macro_pausar:
-                        time.sleep(0.1)  # espera pausado
-                    time.sleep(step / 1000)
-                    elapsed += step
+                    
+                    while macro_pausar and not (stop_event and stop_event.is_set()):
+                        time.sleep(0.1)
+            
+                    # –– calcula fração concluída (0-1) ––
+                    frac = 1.0 - (restante * 1000) / ms_total
+                    # só manda update se mudou pelo menos 1 % para evitar flood
+                    if progress_callback and frac - last_sent >= 0.01:
+                        progress_callback(disp_name, base_step + frac, total)
+                        last_sent = frac
+            
+                    # dorme no máx. 0,5 s, mas acorda antes se stop_event disparar
+                    fatia = min(restante, 0.5)
+                    if stop_event:
+                        stop_event.wait(fatia)
+                    else:
+                        time.sleep(fatia)
+            
+                # garante que a barra chegue ao passo inteiro quando o delay acaba
+                if progress_callback:
+                    progress_callback(disp_name, base_step + 1, total)
+
 
             
             elif tipo == "goto":
