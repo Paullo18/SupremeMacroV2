@@ -18,7 +18,50 @@ import threading, time, pyautogui, keyboard
 from tkinter import Toplevel, IntVar, Label, Entry, simpledialog
 import pytesseract
 
-
+# ───────── helper genérico de rótulo ────────────────────────────
+def _formatar_rotulo(acao: dict) -> str:
+    """
+    Devolve o texto que deve aparecer na label do bloco, priorizando
+    'custom_name' ou 'name'.  Se nenhum desses campos existir, gera
+    um texto padrão de acordo com o tipo da ação.
+    """
+    if acao.get("custom_name"):
+        return acao["custom_name"]
+    if acao.get("name"):
+        return acao["name"]
+    tipo = acao.get("type", "").lower()
+    if tipo == "click":
+        return f"Click @({acao.get('x')},{acao.get('y')})"
+    elif tipo == "delay":
+        return f"Delay: {acao.get('time',0)}ms"
+    elif tipo == "goto":
+        return f"GOTO → {acao.get('label')}"
+    elif tipo == "imagem":
+        return f"Img:{acao.get('imagem')} @({acao.get('x')},{acao.get('y')},{acao.get('w')},{acao.get('h')})"
+    elif tipo == "label":
+        return f"Label: {acao.get('name')}"
+    elif tipo == "loopstart":
+        if acao.get("mode") == "quantidade":
+            return f"INÍCIO LOOP {acao.get('count')}x"
+        return "INÍCIO LOOP INFINITO"
+    elif tipo == "ocr":
+        return f"OCR: '{acao.get('text')}'" if not acao.get("verificar_vazio") else "OCR: [vazio]"
+    elif tipo == "ocr_duplo":
+        cond = acao.get("condicao","AND").upper()
+        return f"OCR Duplo: '{acao.get('text1')}' {cond} '{acao.get('text2')}'"
+    elif tipo == "text":
+        txt = acao.get("content","")
+        return f'TXT: "{txt[:18]}…"' if len(txt) > 20 else f'TXT: "{txt}"'
+    elif tipo == "startthread":
+        return acao.get("thread_name","Thread")
+    elif tipo == "screenshot":
+        if acao.get("mode") == "whole":
+            return "Screenshot: tela inteira"
+        reg = acao.get("region", {})
+        return f"Screenshot: reg ({reg.get('x')},{reg.get('y')},{reg.get('w')}×{reg.get('h')})"
+    else:
+        return tipo.upper() or "Bloco"
+    
 class BlocoManager:
     _next_id = 1      # contador de IDs
     def __init__(self, canvas, app):
@@ -64,7 +107,6 @@ class BlocoManager:
 
         self._has_moved = False
 
-               
     def finalizar_arrasto(self, event):
 
          # rotina já existente
@@ -649,44 +691,8 @@ class BlocoManager:
             # restaura ação e label, se existia
             if acao:
                 novo["acao"] = acao
-                # aqui você repete seu código de criação de label:
-                tipo = acao.get("type", "").lower()
-                if tipo == "click":
-                    txt = f"Click @({acao['x']},{acao['y']})"
-                elif tipo == "delay":
-                    txt = f"Delay: {acao['time']}ms"
-                elif tipo == "goto":
-                    txt = f"GOTO → {acao['label']}"
-                elif tipo == "imagem":
-                    txt = f"Img:{acao['imagem']} @({acao['x']},{acao['y']},{acao['w']},{acao['h']})"
-                elif tipo == "label":
-                    txt = f"Label: {acao['name']}"
-                elif tipo == "loopstart":
-                    if acao.get("mode") == "quantidade":
-                        txt = f"INÍCIO LOOP {acao['count']}x"
-                    else:
-                        txt = "INÍCIO LOOP INFINITO"
-                elif tipo == "ocr":
-                    txt = f"OCR: '{acao['text']}'"
-                elif tipo == "ocr_duplo":
-                    cond = acao.get("condicao", "and").upper()
-                    txt = f"OCR Duplo: '{acao['text1']}' {cond} '{acao['text2']}'"
-                elif tipo == "text":
-                    txt = f'TXT: "{acao["content"][:18]}…"' if len(acao["content"])>20 else f'TXT: "{acao["content"]}"'
-                elif tipo == "startthread":
-                    txt = acao.get("thread_name", "Thread")
-                elif tipo == "screenshot":
-                    if acao.get("name"):
-                        txt = acao["name"]
-                    elif acao.get("mode") == "whole":
-                        txt = "Screenshot: tela inteira"
-                    else:
-                        x, y, w, h = acao['region'].values()
-                        txt = f"Screenshot: reg ({x},{y},{w}×{h})"
-                
-                else:
-                    txt = tipo.upper()
-                cor_label = "blue" if tipo == "startthread" else "black"
+                txt = _formatar_rotulo(acao)      # ← usa o helper novo
+                cor_label = "blue" if acao.get("type") == "startthread" else "black"
                 novo["label_id"] = self.canvas.create_text(
                     x + novo["width"]/2,
                     y + novo["height"] + 8,

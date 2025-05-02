@@ -11,7 +11,7 @@ import pytesseract
 from PIL import ImageGrab, Image
 import io
 import win32clipboard
-import requests
+import tempfile
 from datetime import datetime
 from utils.telegram_util import send_photo
 
@@ -385,26 +385,26 @@ def _run_branch(blocks, next_map, json_path, start_block,
                     full_path = os.path.join(base, fname)
                     print(f"[DEBUG] Salvando screenshot em {full_path}")
                     safe_save(img, full_path)
-                elif st == 'clipboard':
-                    buf = io.BytesIO()
-                    img.convert('RGB').save(buf, 'BMP')
-                    data = buf.getvalue()[14:]
-                    buf.close()
-                    safe_clipboard_set(data)
                 elif st == 'telegram':
-                    # salva temporariamente no disco
-                    base = ac.get('custom_path') if ac.get('path_mode')=='custom' else os.getcwd()
-                    fname = f"screenshot_{datetime.now():%Y%m%d_%H%M%S}.png"
-                    full_path = os.path.join(base, fname)
-                    safe_save(img, full_path)
-
-                    # envia via Telegram
+                    # ① captura já está em `img`
+                    # ② cria arquivo temporário só para a API do Telegram
+                    with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmp:
+                        temp_path = tmp.name
+                    safe_save(img, temp_path)                 # grava a imagem
+                
+                    # ③ envia via Telegram (API continua igual; usa caminho temporário)
                     send_photo(
                         bot_token = ac['token'],
-                        chat_id  = ac['chat_id'],
-                        photo_path = full_path,
-                        caption = ac.get('custom_message', '')
+                        chat_id   = ac['chat_id'],
+                        photo_path = temp_path,
+                        caption   = ac.get('custom_message', '')
                     )
+                
+                    # ④ apaga o temp depois do envio
+                    try:
+                        os.remove(temp_path)
+                    except OSError:
+                        pass
                 # segue para próximo bloco
                 default_outs = next_map[current]['default']
                 current = default_outs[0] if default_outs else None
