@@ -19,6 +19,47 @@ def macro_em_pasta_macros(path_):
     macros_abs = os.path.abspath(storage.MACROS_DIR)
     return abs_path.endswith(os.sep + "macro.json") and abs_path.startswith(macros_abs + os.sep)
 
+def _formatar_rotulo(params: dict) -> str:
+        """Devolve o texto a ser exibido abaixo do bloco."""
+        # 1) nomes dados pelo usuário têm prioridade absoluta
+        if params.get("custom_name"):
+            return params["custom_name"]
+        if params.get("name"):
+            return params["name"]
+    
+        # 2) fallback para rótulos automáticos
+        tipo = params.get("type", "").lower()
+        if tipo == "click":
+            return f"Click @({params.get('x')},{params.get('y')})"
+        elif tipo == "delay":
+            return f"Delay: {params.get('time')}ms"
+        elif tipo == "goto":
+            return f"GOTO → {params.get('label')}"
+        elif tipo == "imagem":
+            return f"Img:{params.get('imagem')} @({params.get('x')},{params.get('y')},{params.get('w')},{params.get('h')})"
+        elif tipo == "label":
+            return f"Label: {params.get('name')}"
+        elif tipo == "loopstart":
+            return "INÍCIO LOOP INFINITO" if params.get("mode") != "quantidade" \
+                   else f"INÍCIO LOOP {params.get('count')}x"
+        elif tipo == "ocr":
+            return f"OCR: '{params.get('text')}'"
+        elif tipo == "ocr_duplo":
+            cond = params.get("condicao", "and").upper()
+            return f"OCR Duplo: '{params.get('text1')}' {cond} '{params.get('text2')}'"
+        elif tipo == "text":
+            txt = params.get("content", params.get("text", ""))
+            return f"TXT: '{txt[:18]}…'" if len(txt) > 20 else f"TXT: '{txt}'"
+        elif tipo == "startthread":
+            return params.get("thread_name", "Thread")
+        elif tipo == "screenshot":
+            if params.get("mode") == "whole":
+                return "Screenshot: tela inteira"
+            else:
+                r = params.get("region", {})
+                return f"Screenshot: reg ({r.get('x')},{r.get('y')},{r.get('w')}×{r.get('h')})"
+        else:
+            return tipo.upper() or "Bloco"
 class FlowchartApp:
     def __init__(self, root):
         self.root = root
@@ -189,45 +230,79 @@ class FlowchartApp:
         self.macro_thread.start()
 
     def _run_with_ui(self, json_path: str, status_win: MacroStatusWindow):
-        # Load JSON and extract thread names
-        with open(json_path, 'r', encoding='utf-8') as f:
+        # ------------------------------------------------------------------
+        # Carrega JSON e prepara nomes de thread
+        # ------------------------------------------------------------------
+        with open(json_path, "r", encoding="utf-8") as f:
             data = json.load(f)
-        thread_names = [
-            blk['params']['thread_name']
-            for blk in data.get('blocks', [])
-            if blk.get('params', {}).get('type') == 'startthread'
-        ]
 
-        self.root.withdraw()  # minimiza janela principal
+        friendly_names      = set()          # para criar os quadros
+        internal2friendly   = {}             # p/ converter "Thread-95" → "UpdateTrade"
 
+        for blk in data.get("blocks", []):
+            params = blk.get("params", {})
+            if params.get("type") == "startthread":
+                fname = params.get("thread_name")
+                if fname:
+                    friendly_names.add(fname)
+
+                # mapeia possíveis nomes internos usados pelo executor
+                internal2friendly[f"Thread-{blk['id']}"] = fname          # ex.: Thread-92
+                for dest_id, fork_kind in params.get("forks", {}).items():
+                    if fork_kind == "Nova Thread":
+                        internal2friendly[f"Thread-{dest_id}"] = fname    # ex.: Thread-95
+
+        # Cria os quadros ANTES da execução (sem “Thread Principal”)
+        status_win.preload_threads(sorted(friendly_names))
+
+        # ------------------------------------------------------------------
+        # 2)  Oculta janela principal e prepara execução
+        # ------------------------------------------------------------------
+        self.root.withdraw()           # minimiza janela principal
         stop_evt = threading.Event()
 
+        # callbacks ----------------------------------------------------------------
         def progress_cb(name, step, total):
-            status_win.update_progress(name, step, total)
+            display = internal2friendly.get(name, name)
+            status_win.update_progress(display, step, total)
 
         def label_cb(name, raw_text):
-            block_id = raw_text.rsplit(' ', 1)[-1]
-            bloco = next((blk for blk in self.blocos.blocks if str(blk["id"]) == str(block_id)), None)
-            if bloco:
-                acao = bloco.get('acao', {})
-                tipo = acao.get('type', '').lower()
+            # --- converte “Thread-95” → nome amigável --------------------
+            display = internal2friendly.get(name, name)
 
-                # Gera um nome mais descritivo do bloco
-                if tipo == 'click':
-                    desc = f"Clique @({acao.get('x')}, {acao.get('y')})"
-                elif tipo == 'delay':
-                    tempo = acao.get('time', 0)
-                    desc = f"Delay de {tempo // 1000}s"
-                elif tipo == 'startthread':
-                    desc = f"Thread → {acao.get('thread_name', f'ID {block_id}')}"
-                else:
-                    desc = tipo.capitalize()
+            # id do bloco que acabou de rodar
+            block_id = raw_text.rsplit(" ", 1)[-1]
 
-                status_win.update_block(name, desc)
+            # ① tenta pegar o rótulo que você escreveu no canvas
+            label_text = self._get_block_label(block_id)
+
+            if label_text and label_text != block_id:
+                # achou label → usa-o diretamente
+                desc = label_text
             else:
-                status_win.update_block(name, f"Bloco {block_id} (não encontrado)")
+                # ② fallback: gera descrição baseada no tipo (lógica antiga)
+                bloco = next((b for b in self.blocos.blocks
+                              if str(b["id"]) == str(block_id)), None)
+                if bloco:
+                    acao = bloco.get("acao", {})
+                    tipo = acao.get("type", "").lower()
+                    if tipo == "click":
+                        desc = f"Clique @({acao.get('x')}, {acao.get('y')})"
+                    elif tipo == "delay":
+                        desc = f"Delay de {acao.get('time', 0) // 1000}s"
+                    elif tipo in {"thread", "startthread"}:
+                        desc = f"Thread → {acao.get('thread_name', f'ID {block_id}')}"
+                    else:
+                        desc = tipo.capitalize()
+                else:
+                    desc = f"Bloco {block_id} (não encontrado)"
 
-        # Execute macro e depois destrói a janela de status
+            status_win.update_block(display, desc)
+
+
+        # ------------------------------------------------------------------
+        # 3) Executa a macro
+        # ------------------------------------------------------------------
         executar_macro_flow(
             json_path,
             progress_callback=progress_cb,
@@ -235,10 +310,11 @@ class FlowchartApp:
             stop_event=stop_evt
         )
 
+        # ------------------------------------------------------------------
+        # 4) Limpeza final
+        # ------------------------------------------------------------------
         status_win.win.after(0, status_win.win.destroy)
         self.root.after(0, self.root.deiconify)
-
-    
 
     def parar_macro(self):          pass
     def abrir_configuracoes(self):
@@ -391,8 +467,6 @@ class FlowchartApp:
         if nome == "Executar":
             self.executar_macro()
             return
-
-
     # -----------------------------------------------------
     # Carregar macro (JSON)
     # -----------------------------------------------------
@@ -448,56 +522,24 @@ class FlowchartApp:
                 params = blk.get("params", {})
                 if params:
                     bloco["acao"] = params
-                    tipo = params.get("type", "").lower()
-                    if tipo == "click":
-                        txt = f"Click @({params.get('x')},{params.get('y')})"
-                    elif tipo == "delay":
-                        txt = f"Delay: {params.get('time')}ms"
-                    elif tipo == "goto":
-                        txt = f"GOTO → {params.get('label')}"
-                    elif tipo == "imagem":
-                        txt = f"Img:{params.get('imagem')} @({params.get('x')},{params.get('y')},{params.get('w')},{params.get('h')})"
-                    elif tipo == "label":
-                        txt = f"Label: {params.get('name')}"
-                    elif tipo == "loopstart":
-                        txt = f"INÍCIO LOOP {params.get('count')}x" if params.get('mode') == 'quantidade' else "INÍCIO LOOP INFINITO"
-                    elif tipo == "ocr":
-                        txt = f"OCR: '{params.get('text')}'"
-                    elif tipo == "ocr_duplo":
-                        cond = params.get('condicao', 'and').upper()
-                        txt = f"OCR Duplo: '{params.get('text1')}' {cond} '{params.get('text2')}'"
-                    elif tipo == "text":
-                        conteudo = params.get('content', params.get('text', ''))
-                        txt = f"TXT: '{conteudo[:18]}…'" if len(conteudo) > 20 else f"TXT: '{conteudo}'"
-                    elif tipo == "startthread":
-                        txt = params.get('thread_name')
-                    elif tipo == "screenshot":
-                        if params.get("name"):
-                            txt = params["name"]
-                        elif params.get("mode") == "whole":
-                            txt = "Screenshot: tela inteira"
-                        else:
-                            r = params.get("region", {})
-                            txt = f"Screenshot: reg ({r['x']},{r['y']},{r['w']}×{r['h']})"
-                    else:
-                        txt = tipo.upper()
-
-                    cor_label = "blue" if tipo == "startthread" else "black"
+                    txt = _formatar_rotulo(params)      # ← nova função
+                    cor_label = "blue" if params.get("type") == "startthread" else "black"
                     bloco["label_id"] = self.canvas.create_text(
-                    x + bloco["width"]/2,
-                    y + bloco["height"] + 8,
-                    text=txt,
-                    font=("Arial", 9),
-                    fill=cor_label
+                        x + bloco["width"]/2, y + bloco["height"] + 8,
+                        text=txt, font=("Arial", 9), fill=cor_label
                     )
-                    #bloco["label_id"] = self.canvas.create_text(
-                    #    x + bloco["width"] / 2,
-                    #    y + bloco["height"] + 8,
-                    #    text=txt, font=("Arial", 9), fill="black"
-                    #)
-                if blk.get("type","").lower() == "texto":
-                    params["type"] = "text"
-                blk["params"] = params
+
+                #     cor_label = "blue" if tipo == "startthread" else "black"
+                #     bloco["label_id"] = self.canvas.create_text(
+                #     x + bloco["width"]/2,
+                #     y + bloco["height"] + 8,
+                #     text=txt,
+                #     font=("Arial", 9),
+                #     fill=cor_label
+                #     )
+                # if blk.get("type","").lower() == "texto":
+                #     params["type"] = "text"
+                # blk["params"] = params
 
             # --- recria setas -----------------------------------
             for conn in data.get("connections", []):

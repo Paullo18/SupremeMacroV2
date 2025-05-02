@@ -4,160 +4,168 @@ from tkinter import ttk
 import threading
 import core.executar as exec_mod
 
+
 class MacroStatusWindow:
-    def __init__(self, master, on_close):
+    """
+    Exibe o progresso de todas as threads de uma macro.
+
+    Parâmetros
+    ----------
+    master : tk.Tk | tk.Toplevel
+    on_close : callable | None
+        Callback disparado quando a janela é destruída.
+    thread_names : list[str] | None
+        Lista de nomes de thread conhecidos *antes* da execução.
+        (Ex.: ['Thread Principal', 'ChecaSinal', 'AtualizaChart' ...])
+    """
+    def __init__(self, master, on_close, thread_names=None):
         self.on_close = on_close
-        # janela flutuante sempre-à-frente
         self.win = tk.Toplevel(master)
         self.win.title("Status da Macro")
         self.win.geometry("420x300")
-        self.win.resizable(False, False)  # impede redimensionamento
         self.win.attributes("-topmost", True)
-        self.win.attributes("-toolwindow", True)
-
-        # permitir arrastar
-        self.win.bind("<ButtonPress-1>", self._start_move)
-        self.win.bind("<B1-Motion>",    self._on_move)
-
-        # container para barras e labels
+        # --- contêiner principal
         self.container = tk.Frame(self.win)
         self.container.pack(fill="both", expand=True, padx=10, pady=10)
 
-        # mapa thread_name → (frame, progressbar, label)
-        self._threads = {}
-        # mapa thread_name → stop_event
-        self._stop_events = {}
-        # só fecha após ter exibido ao menos um widget
+        # mapas auxiliares
+        self._threads: dict[str, tuple[tk.Widget, ttk.Progressbar, tk.Label]] = {}
+        self._stop_events: dict[str, threading.Event | None] = {}
         self._threads_ever_created = False
 
-        # inicia limpeza periódica de threads
-        self.win.after(500, self._cleanup_threads)
-        # inicia check de auto-close
-        self.win.after(500, self._auto_close_check)
+        # cria widgets para nomes já conhecidos
+        if thread_names:
+            for nm in thread_names:
+                self._make_thread_widgets(nm)
 
-        # botões gerais
-        btn_frame = tk.Frame(self.win)
-        btn_frame.pack(fill="x", padx=10, pady=(0, 10))
+        # botões de controle geral
+        bf = tk.Frame(self.win)
+        bf.pack(fill="x", padx=10, pady=(0, 10))
         self.pause_btn = tk.Button(
-            btn_frame, text="Pausar Todas", width=12,
-            command=self.toggle_pause_all
+            bf, text="Pausar Todas", width=12, command=self.toggle_pause_all
         )
         self.pause_btn.pack(side="left", padx=5)
-        tk.Button(
-            btn_frame, text="Stop Todas", width=12,
-            command=self.stop_all
-        ).pack(side="right", padx=5)
+        tk.Button(bf, text="Stop Todas", width=12, command=self.stop_all
+                  ).pack(side="right", padx=5)
 
-    def _auto_close_check(self):
-        # só fecha se já tiver mostrado algo e não houver mais threads
-        if self._threads_ever_created and not self._threads and not any(
-            t.name.startswith("Thread") for t in threading.enumerate()
-        ):
-            try:
-                self.win.destroy()
-            except:
-                pass
-            if self.on_close:
-                self.on_close()
-            return
+        # timers
         self.win.after(500, self._auto_close_check)
+        self.win.after(500, self._cleanup_threads)
 
+    # ---------- movimentação da janela ----------
     def _start_move(self, e):
-        self._drag_x = e.x; self._drag_y = e.y
+        self._drag_x, self._drag_y = e.x, e.y
 
     def _on_move(self, e):
-        dx = e.x - self._drag_x; dy = e.y - self._drag_y
-        x = self.win.winfo_x() + dx; y = self.win.winfo_y() + dy
-        self.win.geometry(f"+{x}+{y}")
+        dx, dy = e.x - self._drag_x, e.y - self._drag_y
+        self.win.geometry(f"+{self.win.winfo_x() + dx}+{self.win.winfo_y() + dy}")
 
-    def _make_thread_widgets(self, name):
-        # ignora se a janela já foi fechada
+    # ---------- criação de widgets por thread ----------
+    def _make_thread_widgets(self, name: str):
         if not self.win.winfo_exists():
             return
-        if name in self._threads:
+        if name in self._threads:        # já existe, não recria
             return
 
         frame = tk.LabelFrame(self.container, text=name, padx=5, pady=5)
         frame.pack(fill="x", padx=5, pady=(0, 8))
+
         pb = ttk.Progressbar(frame, orient="horizontal", mode="determinate")
         pb.pack(fill="x", expand=True)
-        lbl = tk.Label(frame, text="Último bloco: —", anchor="w", justify="left", font=("Segoe UI", 9))
+
+        lbl = tk.Label(
+            frame, text="Último bloco: —", anchor="w",
+            justify="left", font=("Segoe UI", 9)
+        )
         lbl.pack(fill="x")
-        stop_btn = tk.Button(frame, text="Stop",
-                             command=lambda: self._stop_thread(name))
-        stop_btn.pack(anchor="e", pady=(5, 0))
+
+        tk.Button(
+            frame, text="Stop", command=lambda: self._stop_thread(name)
+        ).pack(anchor="e", pady=(5, 0))
 
         self._threads[name] = (frame, pb, lbl)
         self._stop_events.setdefault(name, None)
-        self._threads_ever_created = True
+        self._threads_ever_created = True  # já tem algo na tela
 
-    def register_stop_event(self, name, event):
+        # ---------- API extra: pré-criar threads ----------
+    def preload_threads(self, names: list[str]):
+        """
+        Cria (se ainda não existirem) os quadros de todas as threads indicadas.
+        Pode ser chamado antes mesmo de a execução começar.
+        """
+        for n in names:
+            self._make_thread_widgets(n)
+
+    # ---------- API pública usada pela execução ----------
+    def register_stop_event(self, name: str, event: threading.Event):
         self._stop_events[name] = event
 
-    def _stop_thread(self, name):
+    def update_progress(self, name: str, step: int, total: int):
+        if not self.win.winfo_exists():
+            return
+        if name not in self._threads:
+            self._make_thread_widgets(name)
+
+        _, pb, _ = self._threads[name]
+        try:
+            pb["maximum"] = total
+            pb["value"] = step
+        except tk.TclError:
+            pct = int((step / total) * 100) if total else 100
+            pb["value"] = pct
+        self.win.update_idletasks()
+
+    def update_block(self, name: str, text: str):
+        if not self.win.winfo_exists():
+            return
+        if name not in self._threads:
+            self._make_thread_widgets(name)
+
+        _, _, lbl = self._threads[name]
+        lbl.config(text=f"Último bloco: {text}")
+        self.win.update_idletasks()
+
+    # ---------- ações dos botões ----------
+    def _stop_thread(self, name: str):
         evt = self._stop_events.get(name)
         if evt:
             evt.set()
 
-    def update_progress(self, name, step, total):
-        # ignora callbacks após janela fechada
-        if not self.win.winfo_exists():
-            return
-        if name not in self._threads:
-            self._make_thread_widgets(name)
-        frame, pb, lbl = self._threads[name]
-        # define máximo e valor atual
-        try:
-            pb["maximum"] = total
-            pb["value"]   = step
-        except:
-            # fallback para porcentagem
-            pct = int((step/total)*100) if total else 100
-            pb["value"] = pct
-        # força redraw completo
-        self.win.update()
-
-    def update_block(self, name, text):
-        if not self.win.winfo_exists():
-            return
-        if name not in self._threads:
-            self._make_thread_widgets(name)
-        frame, pb, lbl = self._threads[name]
-        lbl.config(text=f"Último bloco: {text}")
-        self.win.update()
-
     def toggle_pause_all(self):
         exec_mod.macro_pausar = not exec_mod.macro_pausar
-        if exec_mod.macro_pausar:
-            self.pause_btn.config(text="Retomar Todas")
-        else:
-            self.pause_btn.config(text="Pausar Todas")
+        self.pause_btn.config(
+            text="Retomar Todas" if exec_mod.macro_pausar else "Pausar Todas"
+        )
 
     def stop_all(self):
         exec_mod.macro_parar = True
-        # sinaliza stop para todas as threads registradas
         for evt in self._stop_events.values():
             if evt:
                 evt.set()
         try:
             self.win.destroy()
-        except:
-            pass
-        if self.on_close:
-            self.on_close()
+        finally:
+            if self.on_close:
+                self.on_close()
 
+    # ---------- manutenção / encerramento ----------
     def _cleanup_threads(self):
-        # ignora se a janela já foi fechada
-        if not self.win.winfo_exists():
+        """
+        Mantém o loop vivo para eventual uso futuro,
+        mas **não** remove mais widgets de threads encerradas.
+        """
+        if self.win.winfo_exists():
+            self.win.after(500, self._cleanup_threads)
+
+    def _auto_close_check(self):
+        # fecha só se já mostrou algo E não existirem mais threads vivas
+        if self._threads_ever_created and not any(
+            t.name.startswith("Thread") for t in threading.enumerate()
+        ):
+            try:
+                self.win.destroy()
+            finally:
+                if self.on_close:
+                    self.on_close()
             return
-        ativa = {t.name for t in threading.enumerate()}
-        for name, (frame, pb, lbl) in list(self._threads.items()):
-            # ignora entradas sem nome para evitar erro de NoneType
-            if name is None:
-                continue
-            # considera o widget inativo se nenhum thread vivo corresponder ao prefixo
-            if not any(tname.startswith(name) for tname in ativa):
-                frame.destroy()
-                del self._threads[name]
-                self._stop_events.pop(name, None)
-        self.win.after(500, self._cleanup_threads)
+        self.win.after(500, self._auto_close_check)

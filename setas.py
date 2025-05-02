@@ -700,36 +700,33 @@ class SetaManager:
 
     def atualizar_setas(self, *args, **kwargs):
         """
-        Redesenha todas as setas usando as cores definidas em bloco['acao']['forks']:
-          - Fluxo Principal (Continuar Fluxo) → azul  "#0a84ff"
-          - Threads Novas    (Nova Thread)     → preto "#000"
+        Redesenha todas as setas preservando as cores originais
+        (verde, vermelho, azul ou preto) mesmo depois de mover blocos.
         """
-        # 1) Guarde todas as conexões atuais
-        conexoes = list(self.setas)  # [(seta_id, origem, destino), ...]
-
-        # 2) Apague tudo como antes
-        for segs, _, _ in self._setas_info.values():
+        # 1) Coletar todas as conexões e suas cores atuais
+        conexoes_coloridas = []   # [(origem, destino, cor), ...]
+        for seta_id, origem, destino in self.setas:
+            info = self._setas_info.get(seta_id)
+            cor  = info[2] if info and len(info) >= 3 else "#000"
+            conexoes_coloridas.append((origem, destino, cor))
+    
+        # 2) Apagar todos os segmentos existentes
+        for segs, *_ in self._setas_info.values():
             for sid in segs:
                 self.canvas.delete(sid)
-        for seta_id, _, _ in conexoes:
+        for seta_id, _, _ in self.setas:
             self.canvas.delete(seta_id)
         self.canvas.update_idletasks()
-
-        # 3) Limpe caches
+    
+        # 3) Limpar caches
         self._setas_info.clear()
         self.setas.clear()
-
-        # 4) Recrie cada conexão, pintando só o principal de azul
-        for _, origem, destino in conexoes:
-            forks = origem.get("acao", {}).get("forks", {})
-            escolha = forks.get(destino["id"], "Continuar Fluxo")
-        
-            # apenas as setas que abrem thread (“Nova Thread”) são azuis
-            cor = "#0a84ff" if escolha == "Nova Thread" else "#000"
-        
-            if (origem and destino 
-                and self._centro_bloco(origem) 
-                and self._centro_bloco(destino)):
+    
+        # 4) Recriar cada conexão com a cor que estava antes
+        for origem, destino, cor in conexoes_coloridas:
+            if (origem and destino
+                    and self._centro_bloco(origem)
+                    and self._centro_bloco(destino)):
                 self.desenhar_linha(origem, destino, cor_override=cor)
 
 
