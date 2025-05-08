@@ -3,6 +3,19 @@ from tkinter import Toplevel, StringVar, BooleanVar, Label, Entry, Button, messa
 from PIL import ImageGrab, ImageTk
 import pytesseract, os, cv2, numpy as np
 
+# # ─── Definição dinâmica do caminho do Tesseract ───────────────
+# import sys
+# if getattr(sys, "frozen", False):
+#     # Quando empacotado pelo PyInstaller, tesseract.exe ficará em _MEIPASS
+#     base_dir = sys._MEIPASS
+# else:
+#     # Em modo script, fica ao lado deste .py
+#     base_dir = os.path.dirname(__file__)
+
+# # Ajusta o comando para usar o executável incluído no pacote
+# pytesseract.pytesseract.tesseract_cmd = os.path.join(base_dir, "tesseract.exe")
+# # ────────────────────────────────────────────────────────────
+
 pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
 
 # =============================================================================

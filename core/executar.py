@@ -2,7 +2,7 @@ import json
 import time
 import threading
 import traceback
-import os
+import os, sys
 import cv2
 import numpy as np
 import keyboard
@@ -20,7 +20,19 @@ _tess_lock      = threading.Lock()  # para pytesseract
 _clipboard_lock = threading.Lock()  # para win32clipboard
 _io_lock        = threading.Lock()  # para salvar em disco
 
-# Caminho do Tesseract (ajuste se necessário)
+# # Caminho do Tesseract (ajuste se necessário)
+# # ─── Definição dinâmica do caminho do Tesseract ───────────────
+# import sys
+# if getattr(sys, "frozen", False):
+#     # Quando empacotado pelo PyInstaller, tesseract.exe ficará em _MEIPASS
+#     base_dir = sys._MEIPASS
+# else:
+#     # Em modo script, fica ao lado deste .py
+#     base_dir = os.path.dirname(__file__)
+
+# # Ajusta o comando para usar o executável incluído no pacote
+# pytesseract.pytesseract.tesseract_cmd = os.path.join(base_dir, "tesseract.exe")
+# ────────────────────────────────────────────────────────────
 pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
 
 # -------------- flags globais de controle ------------------
