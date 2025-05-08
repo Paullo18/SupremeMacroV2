@@ -1,149 +1,225 @@
+import sys
 import tkinter as tk
-from tkinter import Toplevel, IntVar, StringVar, Label, Entry, Button, Frame
+from tkinter import Toplevel, StringVar, IntVar
+from tkinter import ttk
+from tkcalendar import Calendar  # pip install tkcalendar
 
 def add_delay(actions, update_list, tela, *, initial=None):
-    # Cria janela modal centrada e em foco
-    janela = Toplevel(tela)
-    janela.title("Adicionar Delay")
-    janela.transient(tela)
-    janela.resizable(False, False)
-    janela.grab_set()
-    janela.focus_force()
+    # — Helpers internos —
+    def _ensure_int(var, default=0):
+        try:
+            v = var.get()
+            if v == '' or v is None:
+                var.set(default)
+        except (tk.TclError, TypeError):
+            var.set(default)
 
-    # Atalhos: ESC cancela, ENTER confirma
-    def on_escape(e): janela.destroy()
-    def on_enter(e): confirmar()
-    janela.bind('<Escape>', on_escape)
-    janela.bind('<Return>', on_enter)
+    def _bind_replace_zero(entry, var):
+        def on_key(e):
+            ch = e.char
+            # só substitui se for dígito e o conteúdo for '0' ou vazio
+            if ch.isdigit() and entry.get() in ('0', ''):
+                var.set(int(ch))
+                return 'break'
+            # senão deixa rolar o comportamento normal do Spinbox
+        entry.bind('<KeyPress>', on_key)
 
-    # Container principal
-    container = Frame(janela)
-    container.pack(padx=10, pady=10, fill='x')
+    def _zero_other(a, b):
+        try:
+            if a.get() > 0:
+                b.set(0)
+        except tk.TclError:
+            pass
 
-    # --- Nome customizado do bloco ---
-    Label(container, text="Nome do bloco:").pack(anchor='w')
-    label_var = StringVar(value=initial.get('name','') if initial else '')
-    Entry(container, textvariable=label_var).pack(anchor='w', fill='x', pady=(0,10))
+    def _clamp(var, max_val):
+        try:
+            v = var.get()
+            if v > max_val:
+                var.set(max_val)
+        except (tk.TclError, TypeError):
+            var.set(0)
 
-    # --- Decomposição básica de time (h/m/s) ---
-    if initial and 'time' in initial:
-        total_time = initial['time']
-        h0 = total_time // 3600000
-        rem = total_time % 3600000
-        m0 = rem // 60000
-        rem2 = rem % 60000
-        s0 = rem2 // 1000
-        struct_ms = rem2 % 1000
-    else:
-        h0 = m0 = s0 = struct_ms = 0
+    # — Cria janela modal —
+    top = Toplevel(tela)
+    top.title("Adicionar Delay / Agendar Hora")
+    top.transient(tela)
+    top.resizable(False, False)
+    top.grab_set()
+    top.focus_force()
+    top.columnconfigure(0, weight=1)
 
-    # --- Pré-popula explicitamente ms e ms2, se vierem em initial ---
-    if initial:
-        ms0  = initial.get('ms',  0)    # <-- aqui: pega valor do campo único
-        ms20 = initial.get('ms2', 0)    # <-- aqui: pega valor do campo estruturado
-    else:
-        ms0 = ms20 = 0
+    # — Variáveis iniciais —
+    name_var    = StringVar(value=(initial.get('name') if initial else ''))
 
-    # --- Fallback: se ambos forem zero, decide pelo 'time' bruto ---
-    if ms0==0 and ms20==0 and initial and 'time' in initial:
-        if h0==0 and m0==0 and s0==0:
-            ms0  = total_time
-            ms20 = 0
+    ms_var      = IntVar(value=(initial.get('ms')    if initial and initial.get('ms')    is not None else 0))
+    total0      = (initial.get('time')               if initial and initial.get('time')  is not None else 0)
+    h0          = total0 // 3600000; rem = total0 % 3600000
+    m0          = rem // 60000;      rem2 = rem % 60000
+    s0          = rem2 // 1000;      ms2_0 = rem2 % 1000
+    h_var       = IntVar(value=h0)
+    m_var       = IntVar(value=m0)
+    s_var       = IntVar(value=s0)
+    ms2_var     = IntVar(value=(initial.get('ms2') if initial and initial.get('ms2') is not None else ms2_0))
+
+    date_init   = initial.get('date')    if initial else None
+    hour_var    = IntVar(value=(initial.get('hour')   if initial and initial.get('hour')   is not None else 0))
+    minute_var  = IntVar(value=(initial.get('minute') if initial and initial.get('minute') is not None else 0))
+    second_var  = IntVar(value=(initial.get('second') if initial and initial.get('second') is not None else 0))
+
+    # — Linha 0: Nome do bloco —
+    ttk.Label(top, text="Nome do bloco:")\
+        .grid(row=0, column=0, sticky="w", padx=10, pady=(10,0))
+    ttk.Entry(top, textvariable=name_var)\
+        .grid(row=1, column=0, sticky="ew", padx=10)
+
+    # — Separator —
+    ttk.Separator(top, orient="horizontal")\
+        .grid(row=2, column=0, sticky="ew", padx=10, pady=5)
+
+    # — Linha 3: Modo —
+    mode_var = StringVar(value=(initial.get('type') if initial else 'delay'))
+    mode_frame = ttk.Frame(top)
+    mode_frame.grid(row=3, column=0, sticky="w", padx=10)
+    def switch_mode():
+        if mode_var.get() == 'delay':
+            schedule_lf.grid_forget()
+            delay_lf.grid(row=5, column=0, sticky="ew", padx=10)
         else:
-            ms0  = 0
-            ms20 = struct_ms
+            delay_lf.grid_forget()
+            schedule_lf.grid(row=6, column=0, sticky="ew", padx=10)
+        top.update_idletasks()
+        rw, rh = top.winfo_reqwidth(), top.winfo_reqheight()
+        sw, sh = top.winfo_screenwidth(), top.winfo_screenheight()
+        x, y = (sw-rw)//2, (sh-rh)//2
+        top.geometry(f"{rw}x{rh}+{x}+{y}")
 
-    # --- Delay em milissegundos direto ---
-    Label(container, text="Delay em milissegundos:").pack(anchor='w', pady=(0,5))
-    ms_var = IntVar(value=ms0)  # <-- pré-preenche só o campo usado
-    entry_ms = Entry(container, textvariable=ms_var)
-    entry_ms.pack(anchor='w', fill='x', pady=(0,10))
-    entry_ms.bind('<FocusOut>',
-        lambda e,var=ms_var: var.set(0) if not e.widget.get().strip() else None
-    )
+    ttk.Radiobutton(mode_frame, text="Delay",        variable=mode_var, value='delay',   command=switch_mode)\
+        .pack(side="left")
+    ttk.Radiobutton(mode_frame, text="Agendar Hora", variable=mode_var, value='schedule',command=switch_mode)\
+        .pack(side="left", padx=10)
 
-    # --- Delay estruturado ---
-    Label(container, text="Ou como:").pack(anchor='w')
-    time_frame = Frame(container)
-    time_frame.pack(anchor='w', fill='x', pady=(5,0))
+    # — Separator —
+    ttk.Separator(top, orient="horizontal")\
+        .grid(row=4, column=0, sticky="ew", padx=10, pady=5)
 
-    h_var   = IntVar(value=h0)
-    m_var   = IntVar(value=m0)
-    s_var   = IntVar(value=s0)
-    ms2_var = IntVar(value=ms20)  # <-- pré-preenche só o campo usado
+    # — Labelframe Configurar Delay —
+    delay_lf = ttk.Labelframe(top, text="Configurar Delay")
+    delay_lf.columnconfigure(1, weight=1)
 
-    Label(time_frame, text="Horas:").grid(row=0, column=0, sticky='w')
-    Entry(time_frame, textvariable=h_var, width=5).grid(row=0, column=1, padx=(5,15))
-    Label(time_frame, text="Minutos:").grid(row=0, column=2, sticky='w')
-    Entry(time_frame, textvariable=m_var, width=5).grid(row=0, column=3)
+    # Delay em ms (sem limite)
+    ttk.Label(delay_lf, text="Delay (ms):")\
+        .grid(row=0, column=0, sticky="w", padx=5, pady=5)
+    entry_ms = tk.Spinbox(delay_lf, from_=0, to=sys.maxsize,
+                          textvariable=ms_var, width=12, increment=1)
+    entry_ms.grid(row=0, column=1, sticky="w", padx=5, pady=5)
+    entry_ms.bind('<FocusOut>', lambda e: _ensure_int(ms_var, 0))
+    _bind_replace_zero(entry_ms, ms_var)
+    ms_var.trace_add('write',    lambda *_: _clamp(ms_var,   sys.maxsize))
 
-    Label(time_frame, text="Segundos:").grid(row=1, column=0, sticky='w', pady=(5,0))
-    Entry(time_frame, textvariable=s_var, width=5).grid(row=1, column=1, padx=(5,15), pady=(5,0))
-    Label(time_frame, text="Milissegundos:").grid(row=1, column=2, sticky='w', pady=(5,0))
-    entry_ms2 = Entry(time_frame, textvariable=ms2_var, width=5)
-    entry_ms2.grid(row=1, column=3, pady=(5,0))
-    entry_ms2.bind('<FocusOut>',
-        lambda e,var=ms2_var: var.set(0) if not e.widget.get().strip() else None
-    )
+    # Horas (ilimitado)
+    ttk.Label(delay_lf, text="Horas:")\
+        .grid(row=1, column=0, sticky="w", padx=5, pady=2)
+    entry_h = tk.Spinbox(delay_lf, from_=0, to=sys.maxsize,
+                         textvariable=h_var, width=5, increment=1)
+    entry_h.grid(row=1, column=1, sticky="w", padx=5, pady=2)
+    entry_h.bind('<FocusOut>', lambda e: _ensure_int(h_var, 0))
+    _bind_replace_zero(entry_h, h_var)
+    h_var.trace_add('write',     lambda *_: _clamp(h_var,    sys.maxsize))
 
-    # Mutual exclusion: zera o campo oposto assim que um puder > 0
-    def on_ms_change(*_):
-        try:
-            if ms_var.get() > 0:
-                ms2_var.set(0)
-        except tk.TclError:
-            pass
+    # Minutos (ilimitado)
+    ttk.Label(delay_lf, text="Minutos:")\
+        .grid(row=1, column=2, sticky="w", padx=5, pady=2)
+    entry_m = tk.Spinbox(delay_lf, from_=0, to=sys.maxsize,
+                         textvariable=m_var, width=5, increment=1)
+    entry_m.grid(row=1, column=3, sticky="w", padx=5, pady=2)
+    entry_m.bind('<FocusOut>', lambda e: _ensure_int(m_var, 0))
+    _bind_replace_zero(entry_m, m_var)
+    m_var.trace_add('write',     lambda *_: _clamp(m_var,    sys.maxsize))
 
-    def on_ms2_change(*_):
-        try:
-            if ms2_var.get() > 0:
-                ms_var.set(0)
-        except tk.TclError:
-            pass
+    # Segundos (ilimitado)
+    ttk.Label(delay_lf, text="Segundos:")\
+        .grid(row=2, column=0, sticky="w", padx=5, pady=2)
+    entry_s = tk.Spinbox(delay_lf, from_=0, to=sys.maxsize,
+                         textvariable=s_var, width=5, increment=1)
+    entry_s.grid(row=2, column=1, sticky="w", padx=5, pady=2)
+    entry_s.bind('<FocusOut>', lambda e: _ensure_int(s_var, 0))
+    _bind_replace_zero(entry_s, s_var)
+    s_var.trace_add('write',     lambda *_: _clamp(s_var,    sys.maxsize))
 
-    ms_var.trace_add('write',  on_ms_change)
-    ms2_var.trace_add('write', on_ms2_change)
+    # Milissec. estruturais (0–999)
+    ttk.Label(delay_lf, text="Milissec.:")\
+        .grid(row=2, column=2, sticky="w", padx=5, pady=2)
+    entry_ms2 = tk.Spinbox(delay_lf, from_=0, to=999,
+                           textvariable=ms2_var, width=5, increment=1)
+    entry_ms2.grid(row=2, column=3, sticky="w", padx=5, pady=2)
+    entry_ms2.bind('<FocusOut>', lambda e: _ensure_int(ms2_var, 0))
+    _bind_replace_zero(entry_ms2, ms2_var)
+    ms2_var.trace_add('write',   lambda *_: _clamp(ms2_var,  999))
+    ms_var.trace_add('write',    lambda *_: _zero_other(ms_var,   ms2_var))
+    ms2_var.trace_add('write',   lambda *_: _zero_other(ms2_var, ms_var))
 
-    # --- Confirmação com try/except e gravação de ms/ms2 ---
+    # — Labelframe Agendar Data e Hora — (inalterado)
+    schedule_lf = ttk.Labelframe(top, text="Agendar Data e Hora")
+    schedule_lf.columnconfigure(0, weight=1)
+    ttk.Label(schedule_lf, text="Selecione a data:")\
+        .grid(row=0, column=0, sticky="w", padx=5, pady=5)
+    cal = Calendar(schedule_lf, date_pattern='yyyy-mm-dd')
+    if date_init:
+        try: cal.selection_set(date_init)
+        except: pass
+    cal.grid(row=1, column=0, columnspan=6, padx=5, pady=5)
+
+    ttk.Label(schedule_lf, text="Hora:")\
+        .grid(row=2, column=0, sticky="w", padx=5, pady=2)
+    entry_h2 = tk.Spinbox(schedule_lf, from_=0, to=23, textvariable=hour_var, width=3)
+    entry_h2.grid(row=2, column=1, sticky="w", padx=5, pady=2)
+    entry_h2.bind('<FocusOut>', lambda e: _ensure_int(hour_var, 0))
+    _bind_replace_zero(entry_h2, hour_var)
+    hour_var.trace_add('write',  lambda *_: _clamp(hour_var, 23))
+
+    ttk.Label(schedule_lf, text="Minuto:")\
+        .grid(row=2, column=2, sticky="w", padx=5, pady=2)
+    entry_m2 = tk.Spinbox(schedule_lf, from_=0, to=59, textvariable=minute_var, width=3)
+    entry_m2.grid(row=2, column=3, sticky="w", padx=5, pady=2)
+    entry_m2.bind('<FocusOut>', lambda e: _ensure_int(minute_var, 0))
+    _bind_replace_zero(entry_m2, minute_var)
+    minute_var.trace_add('write',lambda *_: _clamp(minute_var, 59))
+
+    ttk.Label(schedule_lf, text="Segundo:")\
+        .grid(row=2, column=4, sticky="w", padx=5, pady=2)
+    entry_s2 = tk.Spinbox(schedule_lf, from_=0, to=59, textvariable=second_var, width=3)
+    entry_s2.grid(row=2, column=5, sticky="w", padx=5, pady=2)
+    entry_s2.bind('<FocusOut>', lambda e: _ensure_int(second_var, 0))
+    _bind_replace_zero(entry_s2, second_var)
+    second_var.trace_add('write',lambda *_: _clamp(second_var, 59))
+
+    # — Separator inferior & Botões —
+    ttk.Separator(top, orient="horizontal")\
+        .grid(row=7, column=0, sticky="ew", padx=10, pady=5)
+    btn_frame = ttk.Frame(top)
+    btn_frame.grid(row=8, column=0, sticky="e", padx=10, pady=(0,10))
+    ttk.Button(btn_frame, text="Cancelar", command=lambda: top.destroy())\
+        .pack(side="right", padx=(0,5))
     def confirmar():
-        container.focus_set()      # força FocusOut em todos os entries
-        janela.update_idletasks()
-        try:
-            h   = h_var.get()   or 0
-            m   = m_var.get()   or 0
-            s   = s_var.get()   or 0
-            ms2 = ms2_var.get() or 0
-            ms  = ms_var.get()  or 0
-        except tk.TclError:
-            h = m = s = ms2 = ms = 0
-            h_var.set(m_var.set(s_var.set(ms2_var.set(ms_var.set(0)))))
-
-        struct_total = (h*3600 + m*60 + s)*1000 + ms2
-        total = struct_total if struct_total > 0 else ms
-
-        ac = {
-            "type":  "delay",
-            "time":  total,
-            "ms":    ms,     # <-- aqui: salva explicitamente o valor puro
-            "ms2":   ms2     # <-- aqui: salva explicitamente o valor estruturado
-        }
-        name = label_var.get().strip()
-        if name:
-            ac["name"] = name
-
+        nome = name_var.get().strip()
+        if mode_var.get() == 'delay':
+            total_struct = (h_var.get()*3600 + m_var.get()*60 + s_var.get())*1000 + ms2_var.get()
+            total = total_struct if total_struct > 0 else ms_var.get()
+            ac = {"type":"delay", "time":total, "ms":ms_var.get(), "ms2":ms2_var.get()}
+        else:
+            date = cal.get_date()
+            ac = {
+                "type":"schedule", "date":date,
+                "hour":hour_var.get(), "minute":minute_var.get(), "second":second_var.get(),
+                "custom_name":f"{date} {hour_var.get():02d}:{minute_var.get():02d}:{second_var.get():02d}"
+            }
+        if nome:
+            ac["name"] = nome
         actions.append(ac)
         update_list()
-        janela.destroy()
+        top.destroy()
+    ttk.Button(btn_frame, text="OK", command=confirmar).pack(side="right")
 
-    # Botões OK / Cancelar
-    btn_frame = Frame(janela)
-    btn_frame.pack(fill='x', padx=10, pady=(10,10))
-    Button(btn_frame, text="Cancelar", width=10, command=janela.destroy).pack(side='right', padx=(5,0))
-    Button(btn_frame, text="OK",       width=10, command=confirmar).pack(side='right')
-
-    # Centraliza a janela na tela
-    janela.update_idletasks()
-    w = janela.winfo_width();  h = janela.winfo_height()
-    sw = janela.winfo_screenwidth(); sh = janela.winfo_screenheight()
-    x = (sw//2) - (w//2);      y = (sh//2) - (h//2)
-    janela.geometry(f"{w}x{h}+{x}+{y}")
+    # — Inicializa modo e centraliza —
+    switch_mode()
+    top.wait_window()

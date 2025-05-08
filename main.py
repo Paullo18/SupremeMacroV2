@@ -10,8 +10,10 @@ from core.storage import export_macro_to_tmp, salvar_macro_gui, obter_caminho_ma
 from core.executar import executar_macro_flow
 from gui.macro_status import MacroStatusWindow
 from gui.settings_window import SettingsDialog
+from gui.ocr_to_sheet import add_ocr_to_sheet
 import json, os, shutil, threading
 import core.storage as storage
+from tkinter import messagebox
 
 def macro_em_pasta_macros(path_):
     """Retorna True se *path_* for .../Macros/<nome>/macro.json."""
@@ -320,7 +322,8 @@ class FlowchartApp:
     def abrir_configuracoes(self):
         dialog = SettingsDialog(self.root)
         dialog.wait_window()
-    def testar_ocr(self):           pass
+    def testar_ocr(self):
+         add_ocr_to_sheet(actions=None, update_list=None, tela=self.root)
     def abrir_documentacao(self):   pass
     def sobre(self):                messagebox.showinfo("Sobre", "TraderAutoSuite v0.6")
     # =====================================================
@@ -360,6 +363,7 @@ class FlowchartApp:
             ("Screenshot", "screenshot_icon.png"),
             ("Start Thread","thread_icon.png"),
             ("End Thread",  "threadend_icon.png"),
+            ("text_to_sheet","text_to_sheet_icon.png"),
         ]
         for nome, arquivo in botoes_icone:
             caminho = os.path.join("icons", arquivo)

@@ -14,6 +14,7 @@ import win32clipboard
 import tempfile
 from datetime import datetime
 from utils.telegram_util import send_photo
+from utils.google_sheet_util import append_next_row
 
 _grab_lock      = threading.Lock()  # para ImageGrab / screenshot
 _tess_lock      = threading.Lock()  # para pytesseract
@@ -421,7 +422,30 @@ def _run_branch(blocks, next_map, json_path, start_block,
                 default_outs = next_map[current]['default']
                 current = default_outs[0] if default_outs else None
                 continue
-            
+
+            elif tipo == "text_to_sheet":
+                # 1) captura da região
+                bx, by = ac.get("x",0), ac.get("y",0)
+                bw, bh = ac.get("w",0), ac.get("h",0)
+                with _grab_lock:
+                    img = ImageGrab.grab(bbox=(bx, by, bx + bw, by + bh))
+                # 2) aplica escala se >1
+                s = ac.get("scale", 1)
+                if s > 1:
+                    img = img.resize((img.width * s, img.height * s), Image.LANCZOS)
+                # 3) OCR
+                with _tess_lock:
+                    texto = pytesseract.image_to_string(img).strip()
+                # 4) envia para o Sheets
+                try:
+                    append_next_row(texto)
+                except Exception as e:
+                    print(f"[ERROR][text_to_sheet] Falha ao enviar: {e}")
+                # segue para o próximo bloco
+                default_outs = next_map[current].get("default", [])
+                current = default_outs[0] if default_outs else None
+                continue
+
             # (outros tipos como loopstart/loopend/goto/label
             #  podem ser implementados usando next_map)
 

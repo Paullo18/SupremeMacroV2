@@ -13,6 +13,7 @@ from gui.janela_ocr_duplo import add_ocr_duplo
 from gui.janela_texto import add_texto
 from gui.screenshot_janela import add_screenshot
 from gui.fork_janela import abrir_fork_dialog
+from gui.ocr_to_sheet import add_ocr_to_sheet
 from core.update_list import update_list
 import threading, time, pyautogui, keyboard
 from tkinter import Toplevel, IntVar, Label, Entry, simpledialog
@@ -361,7 +362,8 @@ class BlocoManager:
             "fim loop": "endloop_icon.png",
             "sair loop": "exit_loop.png",
             "fim se": "endif_icon.png",
-            "se nao": "else_icon.png"
+            "se nao": "else_icon.png",
+            "text_to_sheet":   "text_to_sheet_icon.png"
         }
         return mapa.get(nome.strip().lower(), "default.png")
 
@@ -1451,6 +1453,40 @@ class BlocoManager:
         # redesenha setas para aplicar cor nova
         self.app.setas.atualizar_setas()
 
+    def _on_double_click_text_to_sheet(self, bloco):
+        # 1) buffer temporário
+        bloco["_tts_buffer"] = []
+
+        # 2) callback de confirmação
+        def finish():
+            if not bloco["_tts_buffer"]:
+                return
+            if not self._is_restoring:
+                self._undo_stack.append(self._snapshot())
+                self._redo_stack.clear()
+
+            # pega última ação (que contém type, x,y,w,h,scale)
+            ac = bloco["_tts_buffer"][-1]
+            bloco["acao"] = ac
+
+            # redesenha rótulo abaixo do bloco
+            if bloco.get("label_id"):
+                self.canvas.delete(bloco["label_id"])
+            bx, by = bloco["x"], bloco["y"]
+            w, h   = bloco["width"], bloco["height"]
+            texto = ac.get("name") or "Text→Sheet"
+            bloco["label_id"] = self.canvas.create_text(
+                bx + w/2, by + h + 8,
+                text=texto, font=("Arial", 9), fill="black"
+            )
+
+        # 3) abre sua janela, passando o buffer e o callback
+        add_ocr_to_sheet(
+            actions     = bloco["_tts_buffer"],            # ← onde o on_ok vai appendar
+            update_list = finish,                          # ← esse finish será chamado
+            tela        = self.app.root,
+            initial     = bloco.get("acao", {})            # pré‑carrega se já existia
+        )
 
     def _on_canvas_double_click(self, event):
         # coordenadas do clique no canvas
@@ -1486,6 +1522,7 @@ class BlocoManager:
                 "screenshot" : self._on_double_click_screenshot,
                 "start thread": self._on_double_click_startthread,
                 "end thread"  : self._on_double_click_endthread,
+                "text_to_sheet": self._on_double_click_text_to_sheet,
             }
     
             if tipo in mapa:
