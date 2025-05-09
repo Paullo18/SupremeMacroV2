@@ -2,7 +2,7 @@
   "macro_name": "MexcV1",
   "blocks": [
     {
-      "id": 1,
+      "id": 901,
       "type": "Label",
       "params": {
         "type": "label",
@@ -12,7 +12,7 @@
       "y": 20
     },
     {
-      "id": 2,
+      "id": 902,
       "type": "Label",
       "params": {
         "type": "label",
@@ -22,7 +22,7 @@
       "y": 20.0
     },
     {
-      "id": 3,
+      "id": 903,
       "type": "Label",
       "params": {
         "type": "label",
@@ -32,16 +32,16 @@
       "y": 127.0
     },
     {
-      "id": 4,
+      "id": 904,
       "type": "Screenshot",
       "params": {
         "type": "screenshot",
         "mode": "region",
         "region": {
-          "x": 56,
-          "y": 161,
-          "w": 599,
-          "h": 578
+          "x": 53,
+          "y": 159,
+          "w": 604,
+          "h": 858
         },
         "save_to": "telegram",
         "path_mode": "default",
@@ -56,7 +56,7 @@
       "y": 20.0
     },
     {
-      "id": 5,
+      "id": 905,
       "type": "Delay",
       "params": {
         "type": "delay",
@@ -66,7 +66,7 @@
       "y": 20.0
     },
     {
-      "id": 6,
+      "id": 906,
       "type": "GoTo",
       "params": {
         "type": "goto",
@@ -76,14 +76,14 @@
       "y": 20.0
     },
     {
-      "id": 8,
+      "id": 907,
       "type": "OCR",
       "params": {
         "type": "ocr",
-        "x": 57,
-        "y": 913,
-        "w": 180,
-        "h": 100,
+        "x": 54,
+        "y": 876,
+        "w": 198,
+        "h": 66,
         "text": "Open",
         "verificar_vazio": false
       },
@@ -91,7 +91,7 @@
       "y": 127.0
     },
     {
-      "id": 9,
+      "id": 908,
       "type": "GoTo",
       "params": {
         "type": "goto",
@@ -101,7 +101,7 @@
       "y": 225.0
     },
     {
-      "id": 10,
+      "id": 909,
       "type": "Clique",
       "params": {
         "type": "click",
@@ -112,7 +112,7 @@
       "y": 127.0
     },
     {
-      "id": 11,
+      "id": 910,
       "type": "Texto",
       "params": {
         "type": "text",
@@ -122,22 +122,22 @@
       "y": 127.0
     },
     {
-      "id": 12,
+      "id": 911,
       "type": "OCR",
       "params": {
         "type": "ocr",
-        "x": 53,
-        "y": 960,
-        "w": 187,
-        "h": 52,
+        "x": 52,
+        "y": 926,
+        "w": 193,
+        "h": 59,
         "text": "Long",
         "verificar_vazio": false
       },
       "x": 801.0,
-      "y": 127.0
+      "y": 126.0
     },
     {
-      "id": 13,
+      "id": 912,
       "type": "Clique",
       "params": {
         "type": "click",
@@ -145,10 +145,10 @@
         "y": 699
       },
       "x": 801.0,
-      "y": 20.0
+      "y": -37.0
     },
     {
-      "id": 14,
+      "id": 913,
       "type": "Clique",
       "params": {
         "type": "click",
@@ -156,29 +156,29 @@
         "y": 697
       },
       "x": 801.0,
-      "y": 226.0
+      "y": 217.0
     },
     {
-      "id": 15,
+      "id": 914,
       "type": "Delay",
       "params": {
         "type": "delay",
         "time": 1000
       },
-      "x": 1013.0,
-      "y": 127.0
+      "x": 645.0,
+      "y": 223.0
     },
     {
-      "id": 16,
+      "id": 915,
       "type": "Screenshot",
       "params": {
         "type": "screenshot",
         "mode": "region",
         "region": {
-          "x": 717,
-          "y": 844,
-          "w": 289,
-          "h": 116
+          "x": 701,
+          "y": 873,
+          "w": 893,
+          "h": 160
         },
         "save_to": "telegram",
         "path_mode": "default",
@@ -187,116 +187,74 @@
         "chat_id": "-1002633076439",
         "telegram_mode": "default",
         "custom_message_enabled": true,
-        "custom_message": "Entrada Detectada!"
+        "custom_message": "Update Trade!"
       },
-      "x": 1013.0,
-      "y": 25.0
+      "x": 165.0,
+      "y": 311.0
     },
     {
-      "id": 17,
-      "type": "GoTo",
-      "params": {
-        "type": "goto",
-        "label": "Close"
-      },
-      "x": 1015.0,
-      "y": 229.0
-    },
-    {
-      "id": 18,
+      "id": 916,
       "type": "Label",
       "params": {
         "type": "label",
-        "name": "Close"
+        "name": "CloseTrade"
       },
-      "x": 989.0,
-      "y": 357.0
+      "x": 1110.0,
+      "y": 383.0
     },
     {
-      "id": 19,
-      "type": "OCR duplo",
-      "params": {
-        "type": "ocr_duplo",
-        "x1": 52,
-        "y1": 909,
-        "w1": 186,
-        "h1": 57,
-        "x2": 49,
-        "y2": 913,
-        "w2": 191,
-        "h2": 53,
-        "text1": "Stop Long",
-        "text2": "Stop Short",
-        "condicao": "or",
-        "vazio1": false,
-        "vazio2": false
-      },
-      "x": 838.0,
-      "y": 357.0
-    },
-    {
-      "id": 20,
-      "type": "GoTo",
-      "params": {
-        "type": "goto",
-        "label": "Close"
-      },
-      "x": 838.0,
-      "y": 448.0
-    },
-    {
-      "id": 21,
+      "id": 917,
       "type": "Clique",
       "params": {
         "type": "click",
         "x": 1464,
         "y": 952
       },
-      "x": 677.0,
-      "y": 357.0
+      "x": 956.0,
+      "y": 383.0
     },
     {
-      "id": 22,
+      "id": 918,
       "type": "Delay",
       "params": {
         "type": "delay",
         "time": 1000
       },
-      "x": 525.0,
-      "y": 357.0
+      "x": 804.0,
+      "y": 383.0
     },
     {
-      "id": 23,
+      "id": 919,
       "type": "Clique",
       "params": {
         "type": "click",
         "x": 1473,
         "y": 954
       },
-      "x": 367.0,
-      "y": 357.0
+      "x": 646.0,
+      "y": 383.0
     },
     {
-      "id": 24,
+      "id": 920,
       "type": "GoTo",
       "params": {
         "type": "goto",
         "label": "CheckSignal"
       },
-      "x": 207.0,
-      "y": 357.0
+      "x": 486.0,
+      "y": 383.0
     },
     {
-      "id": 25,
+      "id": 921,
       "type": "Screenshot",
       "params": {
         "type": "screenshot",
         "mode": "region",
         "region": {
-          "x": 1140,
-          "y": 887,
-          "w": 131,
-          "h": 104
+          "x": 1141,
+          "y": 884,
+          "w": 138,
+          "h": 108
         },
         "save_to": "telegram",
         "path_mode": "default",
@@ -307,160 +265,352 @@
         "custom_message_enabled": true,
         "custom_message": "Trade Closed!"
       },
-      "x": 676.0,
-      "y": 305.0
+      "x": 959.0,
+      "y": 316.0
+    },
+    {
+      "id": 922,
+      "type": "Label",
+      "params": {
+        "type": "label",
+        "name": "UpdateTrade"
+      },
+      "x": 488.0,
+      "y": 311.0
+    },
+    {
+      "id": 923,
+      "type": "Delay",
+      "params": {
+        "type": "delay",
+        "time": 600000
+      },
+      "x": 336.0,
+      "y": 311.0
+    },
+    {
+      "id": 924,
+      "type": "GoTo",
+      "params": {
+        "type": "goto",
+        "label": "UpdateTrade"
+      },
+      "x": 23.0,
+      "y": 311.0
+    },
+    {
+      "id": 925,
+      "type": "Screenshot",
+      "params": {
+        "type": "screenshot",
+        "mode": "region",
+        "region": {
+          "x": 700,
+          "y": 876,
+          "w": 896,
+          "h": 166
+        },
+        "save_to": "telegram",
+        "path_mode": "default",
+        "custom_path": "",
+        "token": "8175439343:AAE6HIVlnoGokSiEudlDzPIYiOv_dkS5ykQ",
+        "chat_id": "-1002633076439",
+        "telegram_mode": "default",
+        "custom_message_enabled": true,
+        "custom_message": "Entrada Detectada!!!"
+      },
+      "x": 645.0,
+      "y": 311.0
+    },
+    {
+      "id": 926,
+      "type": "Label",
+      "params": {
+        "type": "label",
+        "name": "CloseLong"
+      },
+      "x": 940.0,
+      "y": -37.0
+    },
+    {
+      "id": 927,
+      "type": "OCR",
+      "params": {
+        "type": "ocr",
+        "x": 49,
+        "y": 975,
+        "w": 201,
+        "h": 60,
+        "text": "Stop Long",
+        "verificar_vazio": false
+      },
+      "x": 1092.0,
+      "y": -37.0
+    },
+    {
+      "id": 928,
+      "type": "GoTo",
+      "params": {
+        "type": "goto",
+        "label": "CloseTrade"
+      },
+      "x": 1030.0,
+      "y": 58.0
+    },
+    {
+      "id": 929,
+      "type": "GoTo",
+      "params": {
+        "type": "goto",
+        "label": "CloseLong"
+      },
+      "x": 1162.0,
+      "y": 58.0
+    },
+    {
+      "id": 930,
+      "type": "Label",
+      "params": {
+        "type": "label",
+        "name": "CloseShort"
+      },
+      "x": 938.0,
+      "y": 218.0
+    },
+    {
+      "id": 931,
+      "type": "OCR",
+      "params": {
+        "type": "ocr",
+        "x": 43,
+        "y": 974,
+        "w": 213,
+        "h": 62,
+        "text": "Stop Short",
+        "verificar_vazio": false
+      },
+      "x": 1100.0,
+      "y": 217.0
+    },
+    {
+      "id": 932,
+      "type": "GoTo",
+      "params": {
+        "type": "goto",
+        "label": "CloseTrade"
+      },
+      "x": 1009.0,
+      "y": 133.0
+    },
+    {
+      "id": 933,
+      "type": "GoTo",
+      "params": {
+        "type": "goto",
+        "label": "CloseShort"
+      },
+      "x": 1193.0,
+      "y": 137.0
     }
   ],
   "connections": [
     {
-      "from": 1,
-      "to": 2,
+      "from": 901,
+      "to": 902,
       "branch": null,
       "color": "#000"
     },
     {
-      "from": 1,
-      "to": 3,
+      "from": 901,
+      "to": 903,
       "branch": null,
       "color": "#000"
     },
     {
-      "from": 2,
-      "to": 4,
+      "from": 902,
+      "to": 904,
       "branch": null,
       "color": "#000"
     },
     {
-      "from": 4,
-      "to": 5,
+      "from": 904,
+      "to": 905,
       "branch": null,
       "color": "#000"
     },
     {
-      "from": 5,
-      "to": 6,
+      "from": 905,
+      "to": 906,
       "branch": null,
       "color": "#000"
     },
     {
-      "from": 8,
-      "to": 9,
+      "from": 907,
+      "to": 908,
       "branch": "false",
       "color": "red"
     },
     {
-      "from": 3,
-      "to": 8,
+      "from": 903,
+      "to": 907,
       "branch": null,
       "color": "#000"
     },
     {
-      "from": 8,
-      "to": 10,
+      "from": 907,
+      "to": 909,
       "branch": "true",
       "color": "green"
     },
     {
-      "from": 10,
-      "to": 11,
+      "from": 909,
+      "to": 910,
       "branch": null,
       "color": "#000"
     },
     {
-      "from": 11,
-      "to": 12,
+      "from": 910,
+      "to": 911,
       "branch": null,
       "color": "#000"
     },
     {
-      "from": 12,
-      "to": 13,
+      "from": 911,
+      "to": 912,
       "branch": "true",
       "color": "green"
     },
     {
-      "from": 12,
-      "to": 15,
+      "from": 911,
+      "to": 914,
       "branch": "true",
       "color": "green"
     },
     {
-      "from": 12,
-      "to": 14,
+      "from": 911,
+      "to": 913,
       "branch": "false",
       "color": "red"
     },
     {
-      "from": 15,
-      "to": 16,
+      "from": 917,
+      "to": 918,
       "branch": null,
       "color": "#000"
     },
     {
-      "from": 12,
-      "to": 17,
-      "branch": "true",
-      "color": "green"
+      "from": 918,
+      "to": 919,
+      "branch": null,
+      "color": "#000"
     },
     {
-      "from": 12,
-      "to": 17,
+      "from": 919,
+      "to": 920,
+      "branch": null,
+      "color": "#000"
+    },
+    {
+      "from": 908,
+      "to": 903,
+      "branch": null,
+      "color": "#000"
+    },
+    {
+      "from": 911,
+      "to": 914,
       "branch": "false",
       "color": "red"
     },
     {
-      "from": 17,
-      "to": 18,
+      "from": 914,
+      "to": 925,
       "branch": null,
       "color": "#000"
     },
     {
-      "from": 18,
-      "to": 19,
+      "from": 925,
+      "to": 922,
       "branch": null,
       "color": "#000"
     },
     {
-      "from": 19,
-      "to": 20,
+      "from": 922,
+      "to": 923,
+      "branch": null,
+      "color": "#000"
+    },
+    {
+      "from": 923,
+      "to": 915,
+      "branch": null,
+      "color": "#000"
+    },
+    {
+      "from": 915,
+      "to": 924,
+      "branch": null,
+      "color": "#000"
+    },
+    {
+      "from": 912,
+      "to": 926,
+      "branch": null,
+      "color": "#000"
+    },
+    {
+      "from": 926,
+      "to": 927,
+      "branch": null,
+      "color": "#000"
+    },
+    {
+      "from": 927,
+      "to": 929,
       "branch": "false",
       "color": "red"
     },
     {
-      "from": 19,
-      "to": 21,
+      "from": 927,
+      "to": 928,
       "branch": "true",
       "color": "green"
     },
     {
-      "from": 21,
-      "to": 22,
+      "from": 916,
+      "to": 917,
       "branch": null,
       "color": "#000"
     },
     {
-      "from": 22,
-      "to": 23,
+      "from": 916,
+      "to": 921,
       "branch": null,
       "color": "#000"
     },
     {
-      "from": 23,
-      "to": 24,
+      "from": 913,
+      "to": 930,
       "branch": null,
       "color": "#000"
     },
     {
-      "from": 19,
-      "to": 25,
+      "from": 930,
+      "to": 931,
+      "branch": null,
+      "color": "#000"
+    },
+    {
+      "from": 931,
+      "to": 932,
       "branch": "true",
       "color": "green"
     },
     {
-      "from": 9,
-      "to": 3,
-      "branch": null,
-      "color": "#000"
+      "from": 931,
+      "to": 933,
+      "branch": "false",
+      "color": "red"
     }
   ]
 }
