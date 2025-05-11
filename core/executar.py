@@ -16,6 +16,36 @@ from datetime import datetime
 from utils.telegram_util import send_photo
 from utils.google_sheet_util import append_next_row
 
+# ────────────────────────────────────────────────────────────
+# SETTINGS (settings.json)
+#   • Carrega uma única vez e provê helpers para valores padrão
+# ────────────────────────────────────────────────────────────
+
+_SETTINGS_PATH = os.path.join(os.path.dirname(__file__), "..", "settings.json")
+
+def _load_settings():
+    try:
+        with open(_SETTINGS_PATH, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except FileNotFoundError:
+        return {}
+
+_SETTINGS = _load_settings()
+
+def _default_bot():
+    """Retorna {'token': str, 'chat_id': str} do primeiro bot ou dos campos legacy."""
+    bots = _SETTINGS.get("telegram") or _SETTINGS.get("telegram_bots") or []
+    if bots:
+        return bots[0]               # primeiro bot configurado
+    return {
+        "token":   _SETTINGS.get("telegram_token",  ""),
+        "chat_id": _SETTINGS.get("telegram_chat_id", ""),
+    }
+
+def _default_sheet_id():
+    gs = _SETTINGS.get("google_sheets", [])
+    return gs[0]["id"] if gs else None
+
 _grab_lock      = threading.Lock()  # para ImageGrab / screenshot
 _tess_lock      = threading.Lock()  # para pytesseract
 _clipboard_lock = threading.Lock()  # para win32clipboard
@@ -407,8 +437,8 @@ def _run_branch(blocks, next_map, json_path, start_block,
                 
                     # ③ envia via Telegram (API continua igual; usa caminho temporário)
                     send_photo(
-                        bot_token = ac['token'],
-                        chat_id   = ac['chat_id'],
+                        bot_token = ac.get("token")   or _default_bot()["token"],
+                        chat_id   = ac.get("chat_id") or _default_bot()["chat_id"],
                         photo_path = temp_path,
                         caption   = ac.get('custom_message', '')
                     )
@@ -424,27 +454,54 @@ def _run_branch(blocks, next_map, json_path, start_block,
                 continue
 
             elif tipo == "text_to_sheet":
-                # 1) captura da região
-                bx, by = ac.get("x",0), ac.get("y",0)
-                bw, bh = ac.get("w",0), ac.get("h",0)
+                # 1) captura da região ----------------------
+                bx, by = ac.get("x", 0), ac.get("y", 0)
+                bw, bh = ac.get("w", 0), ac.get("h", 0)
                 with _grab_lock:
                     img = ImageGrab.grab(bbox=(bx, by, bx + bw, by + bh))
-                # 2) aplica escala se >1
+            
+                # 2) aplica escala se >1 --------------------
                 s = ac.get("scale", 1)
                 if s > 1:
                     img = img.resize((img.width * s, img.height * s), Image.LANCZOS)
-                # 3) OCR
+            
+                # 3) OCR ------------------------------------
                 with _tess_lock:
                     texto = pytesseract.image_to_string(img).strip()
-                # 4) envia para o Sheets
+            
+                # 4) envia para o Sheets --------------------
                 try:
-                    append_next_row(texto)
+                    #   sheet_id -> ID (ou nome) da planilha
+                    #   tab_id   -> índice da aba      (0 = primeira)
+                    #   column   -> **apenas letras**  (A, B, …)
+                    #   values   -> lista‑de‑listas
+            
+                    sheet_id = (
+                        ac.get("sheet_id")            # preferencial
+                        or ac.get("sheet")            # compat. legacy
+                        or _default_sheet_id()        # fallback settings.json
+                    )
+            
+                    # Extrai só as letras da coluna (remove algarismos, se vier "O1", "A5", …)
+                    import re
+                    col_raw = ac.get("column", "A")
+                    column_letter = re.sub(r"\d+", "", col_raw).upper() or "A"
+            
+                    append_next_row(
+                        sheet_id,                     # 1º
+                        int(ac.get("tab_id", 0)),     # 2º
+                        column_letter,                # 3º (só letras)
+                        [[texto]]                     # 4º (lista‑de‑listas)
+                    )
+            
                 except Exception as e:
                     print(f"[ERROR][text_to_sheet] Falha ao enviar: {e}")
+            
                 # segue para o próximo bloco
                 default_outs = next_map[current].get("default", [])
                 current = default_outs[0] if default_outs else None
                 continue
+
 
             # (outros tipos como loopstart/loopend/goto/label
             #  podem ser implementados usando next_map)

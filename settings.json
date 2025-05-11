@@ -1,4 +1,24 @@
 {
     "telegram_token": "8175439343:AAE6HIVlnoGokSiEudlDzPIYiOv_dkS5ykQ",
-    "telegram_chat_id": "-1002633076439"
+    "telegram_chat_id": "-1002633076439",
+    "google_sheets_creds": "traderautosuite-a3d582ad9769.json",
+    "google_sheets": [
+        {
+            "name": "Estratégia 1",
+            "id": "16xB0QcrS0gQLIkfGAvoc9iwFEbo97ZyCQHMYpn-cV8I"
+        }
+    ],
+    "telegram": [
+        {
+            "name": "SOL_USDT_SINAIS",
+            "token": "8175439343:AAE6HIVlnoGokSiEudlDzPIYiOv_dkS5ykQ",
+            "chat_id": "-1002633076439"
+        },
+        {
+            "name": "BotTest",
+            "token": "7856985613:AAFtJV8oAB6X35aGPIaBbQRuTowegOchDJU",
+            "chat_id": "1612386126"
+        }
+    ],
+    "energy_saving_level": "Nível 1"
 }

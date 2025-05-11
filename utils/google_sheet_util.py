@@ -1,26 +1,57 @@
 import gspread
-from google.oauth2.service_account import Credentials
+from core.config_manager import ConfigManager
+from handlers.credentials_handler import list_google_service_accounts
+from gspread.utils import a1_to_rowcol
 
-# 1. Defina o escopo
-SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 
-# 2. Carregue as credenciais do JSON
-creds = Credentials.from_service_account_file("traderautosuite-a3d582ad9769.json", scopes=SCOPES)
+def _get_service():
+    """
+    Autentica via Service Account configurada e retorna cliente gspread.
+    """
+    settings = ConfigManager.load()
+    cred_name = settings.get("google_sheets_creds")
+    creds_list = list_google_service_accounts()
+    entry = next((c for c in creds_list if c.name == cred_name), None)
+    if entry is None:
+        raise ValueError(f"Credencial '{cred_name}' não encontrada")
+    # Se entry for Path
+    path = entry.path if hasattr(entry, 'path') else str(entry)
+    return gspread.service_account(filename=path)
 
-# 3. Autorize e abra a planilha
-client = gspread.authorize(creds)
-_sh     = client.open_by_key("16xB0QcrS0gQLIkfGAvoc9iwFEbo97ZyCQHMYpn-cV8I")
-_ws     = _sh.sheet1   # ou sh.worksheet("NomeDaAba")
 
-# 4. Escreva algo, por exemplo:
-def append_next_row(valor: str, col: int = 2):
-    # Descobre próxima linha livre na coluna col
-    col_vals = _ws.col_values(col)
-    next_row = len(col_vals) + 1
-    print(f"[Sheets] Próxima linha na coluna {col}: {next_row!r}")
-    print(f"[Sheets] Valor a ser escrito: {repr(valor)}")
-    if not valor:
-        print("[Sheets] Atenção: texto extraído vazio, nada será escrito.")
-        return
-    _ws.update_cell(next_row, col, valor)
-    print("[Sheets] update_cell concluído.")
+def get_sheet_tabs(sheet_name: str) -> list[dict]:
+    """
+    Lista abas de uma planilha configurada pelo nome, retornando dicts com 'title' e 'id'.
+    """
+    settings = ConfigManager.load()
+    sheets_cfg = settings.get("google_sheets", [])
+    entry = next((s for s in sheets_cfg if s.get("name") == sheet_name), None)
+    if not entry:
+        return []
+    client = _get_service()
+    spreadsheet = client.open_by_key(entry.get("id"))
+    return [{"title": ws.title, "id": ws.id} for ws in spreadsheet.worksheets()]
+
+
+def append_next_row(sheet_name: str, tab_id: int, column: str, values: list):
+    """
+    Insere `values` na próxima linha disponível da coluna `column` na aba identificada por `tab_id`.
+    """
+    settings = ConfigManager.load()
+    sheets_cfg = settings.get("google_sheets", [])
+    entry = next((s for s in sheets_cfg if s.get("name") == sheet_name), None)
+    if not entry:
+        raise ValueError(f"Planilha '{sheet_name}' não encontrada")
+    client = _get_service()
+    spreadsheet = client.open_by_key(entry.get("id"))
+    # Seleciona worksheet por id
+    worksheets = spreadsheet.worksheets()
+    worksheet = next((ws for ws in worksheets if ws.id == tab_id), None)
+    if worksheet is None:
+        raise ValueError(f"Aba com id '{tab_id}' não encontrada em '{sheet_name}'")
+    # Converte letra da coluna para índice numérico
+    col_index = a1_to_rowcol(f"{column}1")[1]
+    col_values = worksheet.col_values(col_index)
+    next_row = len(col_values) + 1
+    cell_label = f"{column}{next_row}"
+    worksheet.update(cell_label, values)
