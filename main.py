@@ -13,7 +13,9 @@ from gui.settings_window import SettingsDialog
 from gui.ocr_to_sheet import add_ocr_to_sheet
 import json, os, shutil, threading
 import core.storage as storage
+from core.telegram_listener import start_telegram_bot
 from tkinter import messagebox
+
 
 def macro_em_pasta_macros(path_):
     """Retorna True se *path_* for .../Macros/<nome>/macro.json."""
@@ -71,7 +73,7 @@ def _formatar_rotulo(params: dict) -> str:
 class FlowchartApp:
     def __init__(self, root):
         self.root = root
-        self.root.title("TraderAutoSuite v0.7.0")
+        self.root.title("TraderAutoSuite v0.8.0")
         # ---------------- layout da janela -----------------
         largura_janela, altura_janela = 1400, 835
         largura_tela  = root.winfo_screenwidth()
@@ -79,6 +81,9 @@ class FlowchartApp:
         pos_x = (largura_tela // 2) - (largura_janela // 2)
         pos_y = (altura_tela // 2) - (altura_janela // 2)
         root.geometry(f"{largura_janela}x{altura_janela}+{pos_x}+{pos_y}")
+
+        self.root.bind_all("<Control-r>", lambda evt: self.executar_macro())
+        storage.app = self
 
         # ————— Barra de Menu —————
         menubar = tk.Menu(self.root)
@@ -178,6 +183,8 @@ class FlowchartApp:
 
         self.status.place(x=6, rely=1.0, anchor="sw")
 
+        threading.Thread(target=start_telegram_bot, daemon=True).start()
+
         # -------- gerenciadores ----------------------------
         self.blocos = BlocoManager(self.canvas, self)
         self.setas  = SetaManager(self.canvas, self.blocos)
@@ -188,7 +195,7 @@ class FlowchartApp:
         self._criar_botoes_menu()
         bind_eventos(self.canvas, self.blocos, self.setas, self.root)
     # Métodos de callback (adicione as implementações que desejar)
-    def novo_arquivo(self):          messagebox.showinfo("Novo", "Novo arquivo…")
+    def novo_arquivo(self):         messagebox.showinfo("Novo", "Novo arquivo…")
     def abrir_arquivo(self):        messagebox.showinfo("Abrir", "Abrir arquivo…")
     def salvar_arquivo(self):       messagebox.showinfo("Salvar","Salvar arquivo…")
     def desfazer(self):             pass
@@ -213,6 +220,8 @@ class FlowchartApp:
         return block_id
     
     def executar_macro(self):
+        # marca execução via UI (permanece True até o fim da execução real
+        storage.macro_running = True
         # 1) minimiza a janela principal
         self.root.iconify()
 
@@ -323,6 +332,7 @@ class FlowchartApp:
         # ------------------------------------------------------------------
         status_win.win.after(0, status_win.win.destroy)
         self.root.after(0, self.root.deiconify)
+        storage.macro_running = False
 
     def parar_macro(self):          pass
     def abrir_configuracoes(self):

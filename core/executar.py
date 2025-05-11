@@ -617,9 +617,19 @@ def safe_clipboard_set(data_bytes):
         win32clipboard.EmptyClipboard()
         win32clipboard.SetClipboardData(win32clipboard.CF_DIB, data_bytes)
         win32clipboard.CloseClipboard()
-
+caminho_macro_real = None
+caminho_arquivo_tmp = None
 def executar_macro_flow(json_path: str, progress_callback=None,
                         label_callback=None, stop_event=None):
+    import core.storage as storage
+    # Se estiver sendo executado do diretório tmp -> atualiza caminho temporário
+    parts = os.path.normpath(json_path).split(os.sep)
+    if 'tmp' in parts:
+        storage.caminho_arquivo_tmp = json_path
+    else:
+        # Caso contrário, é um macro salvo
+        storage.caminho_macro_real = json_path
+    # Carrega o fluxo da macro
     blocks, next_map, start = load_macro_flow(json_path)
     global macro_parar, macro_pausar
     macro_parar = macro_pausar = False
