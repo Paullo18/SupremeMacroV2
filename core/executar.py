@@ -262,6 +262,15 @@ def _run_branch(blocks, next_map, json_path, start_block,
                 print(f"[DEBUG][{disp_name}] Escrevendo no bloco {current}: '{texto}'")
                 #time.sleep(1)  # se quiser dar um tempinho pra você focar
                 pyautogui.write(texto)
+            
+            # atalho de teclado (hotkey) ---------------------------
+            elif tipo == "hotkey":
+                combo = ac.get("command", "")            # ex: "Ctrl+S"
+                # quebra em teclas individuais, normaliza para pyautogui
+                keys = [k.strip().lower() for k in combo.split("+") if k.strip()]
+                if keys:
+                    # dispara o atalho
+                    pyautogui.hotkey(*keys)
                 
 
             elif tipo == "delay":

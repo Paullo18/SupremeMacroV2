@@ -52,6 +52,12 @@ def _formatar_rotulo(params: dict) -> str:
         elif tipo == "text":
             txt = params.get("content", params.get("text", ""))
             return f"TXT: '{txt[:18]}…'" if len(txt) > 20 else f"TXT: '{txt}'"
+
+        # exibe comando de atalho
+        elif tipo == "hotkey":
+            combo = params.get("command", params.get("content", ""))
+            return f"CMD: {combo}"
+        
         elif tipo == "startthread":
             return params.get("thread_name", "Thread")
         elif tipo == "screenshot":
