@@ -1,5 +1,6 @@
 import tkinter as tk
-from tkinter import Toplevel, IntVar, StringVar, Label, Entry, Button, Frame, OptionMenu, Canvas
+from tkinter import Toplevel, IntVar, StringVar, Label, Entry, Button, Frame, Canvas, messagebox
+from tkinter import ttk
 import pyautogui, threading, time, keyboard, os, sys
 from PIL import ImageTk
 
@@ -86,11 +87,12 @@ def add_click(actions, update_list, tela, *, initial=None):
     label_var = StringVar(value=initial.get('name','') if initial else '')
     Entry(container, textvariable=label_var).pack(anchor='w', fill='x', pady=(0,10))
 
-    # --- Dropdown de Modo ---
+    # --- Dropdown de Modo (combo branco) ---
     Label(container, text="Modo:").pack(anchor='w')
     modo_var = StringVar(value=(initial.get('mode','Simples') if initial else 'Simples'))
     modos = ['Simples', 'Aleatório']
-    OptionMenu(container, modo_var, *modos).pack(anchor='w', fill='x', pady=(0,10))
+    modo_combo = ttk.Combobox(container, textvariable=modo_var, values=modos, state='readonly')
+    modo_combo.pack(anchor='w', fill='x', pady=(0,10))
 
     # --- Frames para cada modo ---
     simple_frame = Frame(container)
@@ -203,14 +205,58 @@ def add_click(actions, update_list, tela, *, initial=None):
     modo_var.trace_add('write', switch_mode)
     switch_mode()
 
+    # --- Restaura seleção anterior em Aleatório ---
+    if initial and initial.get('mode') == 'Aleatório':
+        # monta região salva
+        x1 = initial.get('x', 0)
+        y1 = initial.get('y', 0)
+        w  = initial.get('w', 0)
+        h  = initial.get('h', 0)
+        region = (x1, y1, x1 + w, y1 + h)
+        # atualiza label e pré‑visualização
+        coords_lbl.config(text=f"({x1},{y1})-({x1+w},{y1+h})")
+        start_live_preview()
+
     # --- Botões OK e Cancelar ---
     def on_cancel():
         stop_live.set()
         janela.destroy()
     btn_frame = Frame(janela)
     btn_frame.pack(fill='x', padx=10, pady=(0,10))
+    
+    # Função de confirmação para o modo Aleatório
+    def confirm_random(event=None):
+        stop_live.set()
+        if not region:
+            messagebox.showwarning("Atenção", "Selecione antes a região.")
+            return
+        x1, y1, x2, y2 = region
+        w, h = x2 - x1, y2 - y1
+        nova_acao = {
+            "type": "click",
+            "mode": "Aleatório",
+            "x": x1, "y": y1,
+            "w": w, "h": h,
+        }
+        name = label_var.get().strip()
+        if name:
+            nova_acao["name"] = name
+        if initial is not None:
+            initial.update(nova_acao)
+        else:
+            actions.append(nova_acao)
+        update_list()
+        janela.destroy()
+
+    # Substitui o handler do OK conforme o modo selecionado
+    def on_ok(event=None):
+        if modo_var.get() == 'Simples':
+            confirm_manual()
+        else:
+            confirm_random()
+
     Button(btn_frame, text="Cancelar", width=10, command=on_cancel).pack(side='right', padx=(5,0))
-    Button(btn_frame, text="OK", width=10, command=confirm_manual).pack(side='right')
+    Button(btn_frame, text="OK",       width=10, command=on_ok).pack(side='right')
 
     # --- Global hotkeys ---
     janela.bind_all("<Return>", confirm_manual)

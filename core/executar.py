@@ -8,6 +8,7 @@ import numpy as np
 import keyboard
 import pyautogui
 import pytesseract
+import random
 from PIL import ImageGrab, Image
 import io
 import win32clipboard
@@ -245,7 +246,16 @@ def _run_branch(blocks, next_map, json_path, start_block,
         try:
             # -------- AÇÕES BÁSICAS ----------------------------------
             if tipo == "click":
-                pyautogui.click(ac["x"], ac["y"])
+                # Modo Aleatório: escolhe ponto random dentro da região
+                if ac.get("mode", "").lower() == "aleatório":
+                    x0, y0 = ac["x"], ac["y"]
+                    w, h = ac["w"], ac["h"]
+                    x = random.randint(x0, x0 + w - 1)
+                    y = random.randint(y0, y0 + h - 1)
+                    pyautogui.click(x, y)
+                else:
+                    # Modo Simples
+                    pyautogui.click(ac["x"], ac["y"])
 
             texto = ac.get("text") or ac.get("content", "")
             if tipo in ("type","text") or (texto and tipo == ""):
