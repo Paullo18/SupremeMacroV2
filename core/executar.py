@@ -13,6 +13,7 @@ from PIL import ImageGrab, Image
 import io
 import win32clipboard
 import tempfile
+import datetime
 from datetime import datetime
 from utils.telegram_util import send_photo
 from utils.google_sheet_util import append_next_row
@@ -310,7 +311,45 @@ def _run_branch(blocks, next_map, json_path, start_block,
                 if progress_callback:
                     progress_callback(disp_name, base_step + 1, total)
 
+            # ───────────────────────────────────────────
+            # Agendar Hora (“schedule”): espera até o momento configurado
+            # ───────────────────────────────────────────
+            elif tipo == "schedule":
+                # 1) Extrai data e hora do bloco
+                date_str = ac.get("date", "")
+                hour     = ac.get("hour", 0)
+                minute   = ac.get("minute", 0)
+                second   = ac.get("second", 0)
 
+                try:
+                    # 2) Constrói datetime alvo e calcula intervalo
+                    #    usa a classe datetime importada diretamente
+                    target_date = datetime.strptime(date_str, "%Y-%m-%d")
+                    target      = target_date.replace(
+                        hour=hour, minute=minute, second=second, microsecond=0
+                    )
+                    now         = datetime.now()
+                    delta_s     = (target - now).total_seconds()
+
+                    # 3) Aguarda até o horário, com suporte a pausa/interrupção
+                    if delta_s > 0:
+                        deadline = time.time() + delta_s
+                        while True:
+                            rem = deadline - time.time()
+                            if rem <= 0 or (stop_event and stop_event.is_set()):
+                                break
+                            # respeita pausa
+                            while macro_pausar:
+                                time.sleep(0.1)
+                            # dorme em fatias de até 1 s para responsividade
+                            time.sleep(min(rem, 1))
+                except Exception as e:
+                    print(f"[ERROR][schedule] Falha ao agendar: {e}")
+
+                # 4) Avança para o próximo bloco
+                default_outs = next_map[current].get("default", [])
+                current = default_outs[0] if default_outs else None
+                continue
             
             elif tipo == "goto":
                 alvo = ac.get("label")  # nome do Label para onde voltar
