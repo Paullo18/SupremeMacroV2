@@ -42,7 +42,7 @@ async def _on_startmacro(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Marca estado de execução antes de disparar
     storage.macro_running = True
 
-    await context.bot.send_message(chat_id, "✅ Recebido /startmacro — iniciando macro…")
+    await context.bot.send_message(chat_id, "✅ Iniciando macro…")
 
     # 1) Se a UI estiver rodando, aciona o mesmo fluxo de "Executar" (UI)
     app_inst = getattr(storage, 'app', None)
@@ -50,7 +50,7 @@ async def _on_startmacro(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # marca estado de execução e dispara UI
         storage.macro_running = True
         app_inst.root.after(0, app_inst.executar_macro)
-        await context.bot.send_message(chat_id, "▶️ Macro iniciada via UI (modo Controle Remoto).")
+        await context.bot.send_message(chat_id, "▶️ Macro iniciada.")
         return
 
     # 2) Fallback headless: escolhe o JSON salvo ou temporário
