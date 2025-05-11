@@ -71,7 +71,7 @@ def _formatar_rotulo(params: dict) -> str:
 class FlowchartApp:
     def __init__(self, root):
         self.root = root
-        self.root.title("TraderAutoSuite v0.6.9")
+        self.root.title("TraderAutoSuite v0.7.0")
         # ---------------- layout da janela -----------------
         largura_janela, altura_janela = 1400, 835
         largura_tela  = root.winfo_screenwidth()
