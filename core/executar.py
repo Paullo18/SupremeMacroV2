@@ -48,6 +48,8 @@ def _default_sheet_id():
     gs = _SETTINGS.get("google_sheets", [])
     return gs[0]["id"] if gs else None
 
+energy_level = _SETTINGS.get("energy_saving_level", "Desligado")
+
 _grab_lock      = threading.Lock()  # para ImageGrab / screenshot
 _tess_lock      = threading.Lock()  # para pytesseract
 _clipboard_lock = threading.Lock()  # para win32clipboard
@@ -367,9 +369,17 @@ def _run_branch(blocks, next_map, json_path, start_block,
 
             # -------- CONDICIONAIS ----------------------------------
             elif tipo in ("ocr", "ocr_duplo", "imagem"):
+                
                 resultado = False
 
                 if tipo == "ocr":
+                    # delays conforme nível
+                    if energy_level == "Nível 1":
+                        time.sleep(0.100)
+                    elif energy_level == "Nível 2":
+                        time.sleep(0.200)
+                    elif energy_level == "Nível 3":
+                        time.sleep(0.400)
                     # ------------ OCR simples -------------
                     bbox = (ac["x"], ac["y"],
                             ac["x"] + ac["w"], ac["y"] + ac["h"])
@@ -383,6 +393,13 @@ def _run_branch(blocks, next_map, json_path, start_block,
                         resultado = esperado in detectado
 
                 elif tipo == "ocr_duplo":
+                    # delays conforme nível
+                    if energy_level == "Nível 1":
+                        time.sleep(0.150)
+                    elif energy_level == "Nível 2":
+                        time.sleep(0.300)
+                    elif energy_level == "Nível 3":
+                        time.sleep(0.600)
                     # ------------ OCR duplo ---------------
                     def _lê(bx, by, bw, bh):
                         img = safe_grab(bbox=(bx, by, bx+bw, by+bh))
@@ -405,6 +422,13 @@ def _run_branch(blocks, next_map, json_path, start_block,
                     resultado = (ok1 and ok2) if cond == "and" else (ok1 or ok2)
 
                 elif tipo == "imagem":
+                    # delays conforme nível
+                    if energy_level == "Nível 1":
+                        time.sleep(0.050)
+                    elif energy_level == "Nível 2":
+                        time.sleep(0.100)
+                    elif energy_level == "Nível 3":
+                        time.sleep(0.200)
                     # ------------ Matching de imagem -----------------
                     # 1) nome vindo do JSON (pode ser só o nome, um path
                     #    relativo tipo "img/…" ou já absoluto)

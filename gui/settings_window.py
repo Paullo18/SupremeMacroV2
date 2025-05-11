@@ -98,8 +98,44 @@ class SettingsDialog(tk.Toplevel):
     def _build_general(self):
         ttk.Label(self.content, text="Selecione o nível de economia de energia:").grid(row=0, column=0, columnspan=4, sticky="w", pady=(0,10))
         self.energy_saving_var = tk.StringVar(value=self.saved_energy_level)
+        # Radio buttons empilhados (cada nível em uma linha)
         for idx, level in enumerate(["Desligado", "Nível 1", "Nível 2", "Nível 3"]):
-            ttk.Radiobutton(self.content, text=level, variable=self.energy_saving_var, value=level).grid(row=1, column=idx, sticky="w", padx=5)
+            ttk.Radiobutton(
+                self.content, text=level,
+                variable=self.energy_saving_var, value=level
+            ).grid(row=1 + idx, column=0, sticky="w", padx=5)
+
+        # ────────────────────────────────────────────
+        # Itens afetados (delay em ms por bloco)
+        # ────────────────────────────────────────────
+        # Título
+        self.energy_title_lbl = ttk.Label(self.content, text="Itens afetados:")
+        self.energy_title_lbl.grid(row=5, column=0, sticky="w", pady=(10,2))
+
+        # Labels empilhadas, recuadas para hierarquia
+        self.img_delay_lbl  = ttk.Label(self.content, text="")
+        self.ocr_delay_lbl  = ttk.Label(self.content, text="")
+        self.ocr2_delay_lbl = ttk.Label(self.content, text="")
+        self.img_delay_lbl .grid(row=6, column=0, sticky="w", pady=(0,2), padx=(20,0))
+        self.ocr_delay_lbl .grid(row=7, column=0, sticky="w", pady=(0,2), padx=(20,0))
+        self.ocr2_delay_lbl.grid(row=8, column=0, sticky="w", pady=(0,2), padx=(20,0))
+        # Função que atualiza os textos de delay
+        def _update_energy_labels(*args):
+            lvl = self.energy_saving_var.get()
+            mapping = {
+                "Desligado": {"Imagem": 0,   "OCR": 0,   "OCR Duplo": 0},
+                "Nível 1":   {"Imagem": "+50",  "OCR": "+100", "OCR Duplo": "+150"},
+                "Nível 2":   {"Imagem": "+100", "OCR": "+200", "OCR Duplo": "+300"},
+                "Nível 3":   {"Imagem": "+200", "OCR": "+400", "OCR Duplo": "+600"},
+            }
+            d = mapping.get(lvl, mapping["Desligado"])
+            self.img_delay_lbl.config( text=f"Imagem: {d['Imagem']} ms" )
+            self.ocr_delay_lbl.config( text=f"OCR: {d['OCR']} ms" )
+            self.ocr2_delay_lbl.config(text=f"OCR Duplo: {d['OCR Duplo']} ms")
+
+        # Atualiza sempre que mudar o nível e uma vez ao abrir
+        self.energy_saving_var.trace_add("write", _update_energy_labels)
+        _update_energy_labels()
 
     # --- Telegram ---
     def _build_telegram(self):
