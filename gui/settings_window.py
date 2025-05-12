@@ -2,6 +2,7 @@ import tkinter as tk
 from tkinter import ttk
 from core.config_manager import ConfigManager
 from handlers.credentials_handler import list_google_service_accounts
+from core import telegram_listener as tl
 
 class SettingsDialog(tk.Toplevel):
     def __init__(self, parent):
@@ -17,6 +18,12 @@ class SettingsDialog(tk.Toplevel):
         self.saved_energy_level = self.settings.get("energy_saving_level", "Desligado")
         initial = self.settings.get("google_sheets_creds", "")
         self.gs_var = tk.StringVar(value=initial)
+
+        # Telegram Commands (Geral)
+        self.telegram_cmd_cfg   = self.settings.get("telegram_commands", {})
+        self.telegram_cmd_enab  = self.telegram_cmd_cfg.get("enabled", True)
+        default_bot = self.telegram_configs[0]["name"] if self.telegram_configs else ""
+        self.telegram_cmd_bot   = self.telegram_cmd_cfg.get("bot", default_bot)
 
         # Listas de linhas dinâmicas
         self.telegram_vars = []  # tuples: (name_var, token_var, chat_id_var, entry_widgets..., remove_btn)
@@ -60,8 +67,12 @@ class SettingsDialog(tk.Toplevel):
         # Botões Salvar/Cancelar
         btn_frame = ttk.Frame(self)
         btn_frame.grid(row=1, column=0, columnspan=2, pady=10, sticky="e")
-        ttk.Button(btn_frame, text="Salvar", command=self._on_save).pack(side="right", padx=5)
+        ttk.Button(btn_frame, text="Salvar",   command=self._on_save  ).pack(side="right", padx=5)
+
         ttk.Button(btn_frame, text="Cancelar", command=self._on_cancel).pack(side="right")
+    def _on_cancel(self):
+        """Fecha a janela sem salvar alterações."""
+        self.destroy()
 
     def _center_window(self, parent, width, height):
         self.update_idletasks()
@@ -139,13 +150,50 @@ class SettingsDialog(tk.Toplevel):
 
     # --- Telegram ---
     def _build_telegram(self):
-        ttk.Button(self.content, text="Adicionar Telegram", command=self._add_telegram).grid(row=0, column=2, sticky="e", pady=5)
+        # Checkbox
+        self.tg_enabled_var = tk.BooleanVar(value=self.telegram_cmd_enab)
+        chk = ttk.Checkbutton(
+            self.content,
+            text="Ativar Comandos do Telegram",
+            variable=self.tg_enabled_var, onvalue=True, offvalue=False
+        )
+        chk.grid(row=1, column=0, columnspan=2, sticky="w", pady=(2,6))
+
+        # Dropdown bot
+        ttk.Label(self.content, text="Bot controlador:").grid(row=2, column=0, sticky="w")
+        bot_names = [cfg.get("name", "") for cfg in self.telegram_configs]
+        self.tg_bot_var = tk.StringVar(value=self.telegram_cmd_bot)
+        self.tg_bot_combo = ttk.Combobox(
+            self.content,
+            textvariable=self.tg_bot_var,
+            values=bot_names,
+            state="readonly",
+            width=25
+        )
+        self.tg_bot_combo.grid(row=2, column=1, sticky="w")
+
+        # Enable/disable combobox when checkbox changes
+        def _toggle_combo(*_):
+            state = "readonly" if self.tg_enabled_var.get() else "disabled"
+            self.tg_bot_combo.configure(state=state)
+        self.tg_enabled_var.trace_add("write", _toggle_combo)
+        _toggle_combo()
+
+        sep = ttk.Separator(self.content, orient="horizontal")
+        sep.grid(row=3, column=0, columnspan=4, sticky="ew", pady=(10,10))
+
+        # ------------------------------------------------------------------
+        # Resto dos controles Telegram (bots cadastrados)
+        # ------------------------------------------------------------------
+
+        ttk.Button(self.content, text="Adicionar Telegram", command=self._add_telegram).grid(row=4, column=2, sticky="e", pady=5)
         for col, text in enumerate(["Nome", "Bot Token", "Chat ID"]):
-            ttk.Label(self.content, text=text).grid(row=1, column=col, sticky="w", pady=(10,0))
+            ttk.Label(self.content, text=text).grid(row=5, column=col, sticky="w", pady=(10,0))
+
         self.telegram_frame = ttk.Frame(self.content)
         for i in range(4):
             self.telegram_frame.columnconfigure(i, weight=1 if i<3 else 0)
-        self.telegram_frame.grid(row=2, column=0, columnspan=4, sticky="nsew")
+        self.telegram_frame.grid(row=6, column=0, columnspan=4, sticky="nsew")
         # Reconstrói linhas
         existing = self.telegram_vars or []
         self.telegram_vars.clear()
@@ -239,6 +287,7 @@ class SettingsDialog(tk.Toplevel):
             if name and token and chat_id:
                 configs.append({"name": name, "token": token, "chat_id": chat_id})
         self.settings["telegram"] = configs or self.telegram_configs
+        
         # Sheets
         self.settings["google_sheets_creds"] = self.gs_var.get()
         configs = []
@@ -248,11 +297,25 @@ class SettingsDialog(tk.Toplevel):
             if name and sid:
                 configs.append({"name": name, "id": sid})
         self.settings["google_sheets"] = configs
+        
         # Economia de Energia
         self.settings["energy_saving_level"] = getattr(self, 'energy_saving_var', tk.StringVar()).get()
-        # Salva e notifica
-        ConfigManager.save(self.settings)
-        self.destroy()
 
-    def _on_cancel(self):
+        # Telegram Commands (controle remoto)
+        enabled = getattr(self, "tg_enabled_var", tk.BooleanVar(value=True)).get()
+        bot_sel = getattr(self, "tg_bot_var", tk.StringVar(value="")).get()
+        self.settings["telegram_commands"] = {
+            "enabled": enabled,
+            "bot":     bot_sel
+        }
+
+        # Salva configurações
+        ConfigManager.save(self.settings)
+
+        # Liga/desliga listener de acordo com flag
+        # Reinicia o listener para aplicar QUALQUER alteração imediatamente
+        tl.stop_telegram_bot()      # inofensivo se já estiver parado
+        if enabled:                 # religa só se a flag estiver marcada
+            tl.start_telegram_bot()
+
         self.destroy()

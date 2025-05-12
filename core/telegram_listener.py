@@ -10,25 +10,35 @@ from telegram.ext import MessageHandler, filters
 
 import core.storage as storage
 
-# Paths
-_BASE_DIR = os.path.dirname(os.path.dirname(__file__))  # raiz do projeto
-_SETTINGS_PATH = os.path.join(_BASE_DIR, "settings.json")
-
-# Carrega configurações gerais
-with open(_SETTINGS_PATH, "r", encoding="utf-8") as f:
-    _SETTINGS = json.load(f)
-
-# Token do bot (primeiro configurado)
-bots = _SETTINGS.get("telegram", [])
-if not bots:
-    raise RuntimeError("Nenhum bot Telegram configurado em settings.json")
-TOKEN = bots[0]["token"]
-
-# Importa storage para controle de caminhos e UI instance
-import core.storage as storage
-
-# Função principal de execução headless
 from core.executar import executar_macro_flow as run_macro
+from core.config_manager import ConfigManager
+
+# ---------------- helpers -----------------
+# (re)carrega settings e atualiza globais
+def _reload_settings():
+    global _SETTINGS, tg_cmd_cfg, bots, selected_name, TOKEN
+
+    _SETTINGS  = ConfigManager.load()
+    tg_cmd_cfg = _SETTINGS.get("telegram_commands", {"enabled": True})
+    bots       = _SETTINGS.get("telegram", [])
+
+    # qual bot usar?
+    selected_name = tg_cmd_cfg.get("bot", bots[0]["name"] if bots else "")
+    bot_row = next(
+        (b for b in bots if b.get("name") == selected_name),
+        bots[0] if bots else {}
+    )
+    TOKEN = bot_row.get("token")
+
+# primeira carga
+_reload_settings()
+
+# ---------------- estado global do listener ----------------
+APPLICATION      = None   # referência ao objeto Application
+APPLICATION_LOOP = None   # loop da thread do listener
+_BOT_THREAD      = None   # thread onde o polling roda
+_SHUTTING_DOWN   = False  # evita start enquanto o stop não terminou
+
 
 # Evento global para controle de parada de macro
 _current_stop_event = None
@@ -140,20 +150,73 @@ async def _on_command(update, context):
     # Registra comandos de início e parada
 
 def start_telegram_bot():
-    """Inicializa o bot Telegram e começa o polling em thread separada."""
-    # Cria e define novo loop de eventos para esta thread
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
+    """Liga o polling se ainda não estiver rodando e se estiver habilitado."""
+    global APPLICATION, APPLICATION_LOOP, _BOT_THREAD, _SHUTTING_DOWN
 
-    # Constrói a aplicação Telegram
-    application = (
-        ApplicationBuilder()
-        .token(TOKEN)
-        .build()
+    if _SHUTTING_DOWN:            # ainda finalizando
+        return
+
+
+    _reload_settings()   # usa configurações mais recentes
+    if APPLICATION or not tg_cmd_cfg.get("enabled", True) or not TOKEN:
+        return
+
+    def _thread_target():
+        global APPLICATION_LOOP
+        # cada thread precisa de seu próprio loop
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        APPLICATION_LOOP = loop
+
+        # cria aplicação e handlers
+        global APPLICATION
+        APPLICATION = ApplicationBuilder().token(TOKEN).build()
+        APPLICATION.add_handler(CommandHandler("startmacro", _on_startmacro))
+        APPLICATION.add_handler(CommandHandler("stopmacro",  _on_stopmacro))
+        APPLICATION.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, _on_command))
+        APPLICATION.add_handler(MessageHandler(filters.COMMAND, _on_command))
+
+        print("📲 Telegram listener iniciado.")
+        # bloqueia esta thread até que APPLICATION.stop() seja aguardado
+        APPLICATION.run_polling(stop_signals=None)
+
+    _BOT_THREAD = threading.Thread(
+        target=_thread_target,
+        name="TelegramListener",
+        daemon=True
     )
-    application.add_handler(CommandHandler("startmacro", _on_startmacro))
-    application.add_handler(CommandHandler("stopmacro",  _on_stopmacro))
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, _on_command))
-    application.add_handler(MessageHandler(filters.COMMAND, _on_command))
-    print("📲 Telegram listener rodando (pressione Ctrl+C para parar).")
-    application.run_polling()
+    _BOT_THREAD.start()
+
+def stop_telegram_bot():
+    """Desliga o polling (se estiver ativo) sem travar a UI."""
+    global APPLICATION, APPLICATION_LOOP, _BOT_THREAD
+
+    global APPLICATION, APPLICATION_LOOP, _BOT_THREAD, _SHUTTING_DOWN
+
+    if not APPLICATION or _SHUTTING_DOWN:
+        return  # já parado ou já em processo de parada
+
+    _SHUTTING_DOWN = True
+
+    async def _shutdown():
+        await APPLICATION.stop()
+        print("📲 Telegram listener parado.")
+
+    # agenda o shutdown no loop do listener
+    asyncio.run_coroutine_threadsafe(_shutdown(), APPLICATION_LOOP)
+
+    # espera o término em background sem travar a UI
+    def _wait_and_cleanup():
+        global APPLICATION, APPLICATION_LOOP, _BOT_THREAD, _SHUTTING_DOWN
+        if _BOT_THREAD and _BOT_THREAD.is_alive():
+            _BOT_THREAD.join()         # bloqueia só nesta thread auxiliar
+        APPLICATION      = None
+        APPLICATION_LOOP = None
+        _BOT_THREAD      = None
+        _SHUTTING_DOWN   = False       # libera novo start
+
+    threading.Thread(
+        target=_wait_and_cleanup,
+        name="TL_Cleanup",
+        daemon=True
+    ).start()
