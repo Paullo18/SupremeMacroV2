@@ -76,7 +76,7 @@ class FlowchartApp:
         self.root = root
         self.root.title("TraderAutoSuite v0.8.0")
         # ---------------- layout da janela -----------------
-        largura_janela, altura_janela = 1400, 835
+        largura_janela, altura_janela = 1400, 890
         largura_tela  = root.winfo_screenwidth()
         altura_tela   = root.winfo_screenheight()
         pos_x = (largura_tela // 2) - (largura_janela // 2)
