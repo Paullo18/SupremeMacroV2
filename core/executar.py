@@ -480,6 +480,8 @@ def _run_branch(blocks, next_map, json_path, start_block,
                     _, max_val, _, _ = cv2.minMaxLoc(res)
                     th = ac.get("threshold", 0.80)
                     resultado = max_val >= th
+
+            
                 
             
                 # escolhe ramo e lista de destinos
@@ -493,6 +495,37 @@ def _run_branch(blocks, next_map, json_path, start_block,
                     current = next_map[current]["default"][0]
                 else:
                     current = None
+                continue
+
+            elif tipo in ("remote_control", "telegram_command"):
+                esperado = ac.get("command", "").strip()
+                if not esperado:
+                    print(f"[WARN][{disp_name}] Comando vazio — segue fluxo.")
+                else:
+                    print(f"[DEBUG][{disp_name}] Aguardando comando remoto '{esperado}'…")
+
+                    import core.storage as storage, threading
+                    if not hasattr(storage, "remote_waiters"):
+                        storage.remote_waiters = {}
+
+                    evt = threading.Event()
+                    storage.remote_waiters.setdefault(esperado, []).append(evt)
+
+                    # Aguarda até que (_on_command) dispare evt.set()
+                    while not evt.is_set():
+                        if (stop_event and stop_event.is_set()) or macro_parar:
+                            break
+                        time.sleep(0.1)
+
+                    # Remove o waiter da lista
+                    try:
+                        storage.remote_waiters[esperado].remove(evt)
+                    except (KeyError, ValueError):
+                        pass
+
+                # segue para o próximo bloco
+                outs = next_map[current].get("default", [])
+                current = outs[0] if outs else None
                 continue
             
             elif tipo == 'screenshot':

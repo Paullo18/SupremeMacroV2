@@ -11,6 +11,7 @@ from core.executar import executar_macro_flow
 from gui.macro_status import MacroStatusWindow
 from gui.settings_window import SettingsDialog
 from gui.ocr_to_sheet import add_ocr_to_sheet
+from gui.telegram_command import add_telegram_command
 import json, os, shutil, threading
 import core.storage as storage
 from core.telegram_listener import start_telegram_bot
@@ -380,6 +381,7 @@ class FlowchartApp:
             ("Start Thread","thread_icon.png"),
             ("End Thread",  "threadend_icon.png"),
             ("text_to_sheet","text_to_sheet_icon.png"),
+            ("Telegram Command","telegram_command_icon.png"),
         ]
         for nome, arquivo in botoes_icone:
             caminho = os.path.join("icons", arquivo)

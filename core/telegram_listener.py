@@ -6,6 +6,8 @@ import asyncio
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
 
+from telegram.ext import MessageHandler, filters
+
 # Paths
 _BASE_DIR = os.path.dirname(os.path.dirname(__file__))  # raiz do projeto
 _SETTINGS_PATH = os.path.join(_BASE_DIR, "settings.json")
@@ -103,6 +105,20 @@ async def _on_stopmacro(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Se não havia macro nenhuma
     await context.bot.send_message(chat_id, "⚠️ Nenhuma macro em execução para parar.")
 
+# Handler para disparar remote_control
+async def _on_command(update, context):
+    txt = update.message.text.strip()
+    import core.storage as storage
+    if hasattr(storage, "remote_waiters") and txt in storage.remote_waiters:
+        # desenfileira todos os eventos esperando por este comando
+        for evt in list(storage.remote_waiters[txt]):
+            evt.set()
+        await context.bot.send_message(update.effective_chat.id,
+            f"✅ Comando remoto '{txt}' recebido! Continuando macro...")
+
+
+    # Registra comandos de início e parada
+
 def start_telegram_bot():
     """Inicializa o bot Telegram e começa o polling em thread separada."""
     # Cria e define novo loop de eventos para esta thread
@@ -115,11 +131,9 @@ def start_telegram_bot():
         .token(TOKEN)
         .build()
     )
-
-    # Registra comandos de início e parada
     application.add_handler(CommandHandler("startmacro", _on_startmacro))
-    application.add_handler(CommandHandler("stopmacro", _on_stopmacro))
-
+    application.add_handler(CommandHandler("stopmacro",  _on_stopmacro))
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, _on_command))
+    application.add_handler(MessageHandler(filters.COMMAND, _on_command))
     print("📲 Telegram listener rodando (pressione Ctrl+C para parar).")
-    # Inicia polling (bloqueante, mas roda em thread separada)
     application.run_polling()

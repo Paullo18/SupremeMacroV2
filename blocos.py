@@ -14,6 +14,7 @@ from gui.janela_texto import add_texto
 from gui.screenshot_janela import add_screenshot
 from gui.fork_janela import abrir_fork_dialog
 from gui.ocr_to_sheet import add_ocr_to_sheet
+from gui.telegram_command import add_telegram_command
 from core.update_list import update_list
 import threading, time, pyautogui, keyboard
 from tkinter import Toplevel, IntVar, Label, Entry, simpledialog
@@ -160,22 +161,26 @@ class BlocoManager:
         )
 
         # --------------------------------------------------
-        # 4) ícone
+        # 4) ícone (garante que pil_icon e tk_img existam)
         # --------------------------------------------------
         caminho_icone = os.path.join("icons", self._mapear_nome_para_icone(nome))
         if os.path.exists(caminho_icone):
-            pil_icon = Image.open(caminho_icone)          # PIL.Image 1×
-            tk_size  = (z(self.block_width), z(self.block_height))
-            tk_img   = ImageTk.PhotoImage(pil_icon.resize(tk_size, Image.LANCZOS))
-            icon = self.canvas.create_image(x, y, anchor="nw", image=tk_img)
-            bloco_icon_data = {
-                "_pil_orig":   pil_icon.copy(),
-                "_icon_scale": self.app._zoom_scale,
-                "_icon_ref":   tk_img,
-            }
+            pil_icon = Image.open(caminho_icone)
         else:
-            icon = None
-            bloco_icon_data = {}
+            # imagem vazia caso o ícone não exista
+            pil_icon = Image.new("RGBA", (self.block_width, self.block_height), (0,0,0,0))
+        # redimensiona para o tamanho do bloco e cria PhotoImage
+        tk_size      = (z(self.block_width), z(self.block_height))
+        pil_resized  = pil_icon.resize(tk_size, Image.LANCZOS)
+        tk_img       = ImageTk.PhotoImage(pil_resized)
+        # só desenha no canvas se o arquivo existir
+        icon = self.canvas.create_image(x, y, anchor="nw", image=tk_img) \
+               if os.path.exists(caminho_icone) else None
+        bloco_icon_data = {
+            "_pil_orig":   pil_icon.copy(),
+            "_icon_scale": self.app._zoom_scale,
+            "_icon_ref":   tk_img,
+        }
 
         # --------------------------------------------------
         # 5) dicionário do bloco
@@ -313,6 +318,10 @@ class BlocoManager:
              self.canvas.tag_bind(rect, "<Double-Button-1>",
                                  lambda e, b=bloco: self._on_double_click_endthread(b)
              )
+        elif lt == "remote_control":
+            self.canvas.tag_bind(rect,"<Double-Button-1>",
+                                 lambda e, b=bloco: self._on_double_click_remote_control(b)
+             )
 
 
         # --------------------------------------------------
@@ -363,7 +372,8 @@ class BlocoManager:
             "sair loop": "exit_loop.png",
             "fim se": "endif_icon.png",
             "se nao": "else_icon.png",
-            "text_to_sheet":   "text_to_sheet_icon.png"
+            "text_to_sheet":   "text_to_sheet_icon.png",
+            "telegram command":"telegram_command_icon.png",
         }
         return mapa.get(nome.strip().lower(), "default.png")
 
@@ -1488,6 +1498,41 @@ class BlocoManager:
             initial     = bloco.get("acao", {})            # pré‑carrega se já existia
         )
 
+    def _on_double_click_telegram_command(self, bloco):
+        """
+        Abre a janela de Remote Control para configurar nome e comando.
+        """
+        # 1) buffer temporário
+        bloco["_remote_control_buffer"] = []
+
+        # 2) callback de confirmação
+        def finish():
+            ac = (bloco["_remote_control_buffer"][-1]
+                  if bloco["_remote_control_buffer"] else bloco.get("acao", {}))
+            bloco["acao"] = ac
+            # atualiza label
+            if bloco.get("label_id"):
+                self.canvas.delete(bloco["label_id"])
+            bx, by = bloco["x"], bloco["y"]
+            w, h   = bloco["width"], bloco["height"]
+            txt = ac.get("name") or "Remote Control"
+            bloco["label_id"] = self.canvas.create_text(
+                bx + w/2, by + h + 8,
+                text=txt, font=("Arial", 9), fill="black"
+            )
+            # snapshot de undo
+            if not self._is_restoring:
+                self._undo_stack.append(self._snapshot())
+                self._redo_stack.clear()
+
+        # 3) invoca a janela de configuração
+        add_telegram_command(
+            actions     = bloco["_remote_control_buffer"],
+            update_list = finish,
+            tela        = self.app.root,
+            initial     = bloco.get("acao", {})
+        )
+
     def _on_canvas_double_click(self, event):
         # coordenadas do clique no canvas
         x, y = self.canvas.canvasx(event.x), self.canvas.canvasy(event.y)
@@ -1523,6 +1568,7 @@ class BlocoManager:
                 "start thread": self._on_double_click_startthread,
                 "end thread"  : self._on_double_click_endthread,
                 "text_to_sheet": self._on_double_click_text_to_sheet,
+                "telegram command": self._on_double_click_telegram_command,
             }
     
             if tipo in mapa:
