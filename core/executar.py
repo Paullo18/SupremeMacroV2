@@ -17,6 +17,8 @@ import datetime
 from datetime import datetime
 from utils.telegram_util import send_photo
 from utils.google_sheet_util import append_next_row
+import core.storage as storage
+import time
 
 # ────────────────────────────────────────────────────────────
 # SETTINGS (settings.json)
@@ -504,7 +506,6 @@ def _run_branch(blocks, next_map, json_path, start_block,
                 else:
                     print(f"[DEBUG][{disp_name}] Aguardando comando remoto '{esperado}'…")
 
-                    import core.storage as storage, threading
                     if not hasattr(storage, "remote_waiters"):
                         storage.remote_waiters = {}
 
