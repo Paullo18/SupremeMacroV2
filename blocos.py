@@ -15,6 +15,7 @@ from gui.screenshot_janela import add_screenshot
 from gui.fork_janela import abrir_fork_dialog
 from gui.ocr_to_sheet import add_ocr_to_sheet
 from gui.telegram_command import add_telegram_command
+from gui.janela_run_macro import add_run_macro
 from core.update_list import update_list
 import threading, time, pyautogui, keyboard
 from tkinter import Toplevel, IntVar, Label, Entry, simpledialog
@@ -318,9 +319,13 @@ class BlocoManager:
              self.canvas.tag_bind(rect, "<Double-Button-1>",
                                  lambda e, b=bloco: self._on_double_click_endthread(b)
              )
-        elif lt == "remote_control":
+        elif lt == "telegram command":
             self.canvas.tag_bind(rect,"<Double-Button-1>",
-                                 lambda e, b=bloco: self._on_double_click_remote_control(b)
+                                 lambda e, b=bloco: self._on_double_click_telegram_command(b)
+             )
+        elif lt == "run_macro":
+            self.canvas.tag_bind(rect,"<Double-Button-1>",
+                                 lambda e, b=bloco: self._on_double_click_run_macro(b)
              )
 
 
@@ -374,6 +379,7 @@ class BlocoManager:
             "se nao": "else_icon.png",
             "text_to_sheet":   "text_to_sheet_icon.png",
             "telegram command":"telegram_command_icon.png",
+            "run macro":         "run_macro_icon.png",
         }
         return mapa.get(nome.strip().lower(), "default.png")
 
@@ -1533,6 +1539,39 @@ class BlocoManager:
             initial     = bloco.get("acao", {})
         )
 
+    def _on_double_click_run_macro(self, bloco):
+        "Configura o bloco Run Macro"
+        bloco["_run_macro_buffer"] = []
+        def finish():
+            # 1) snapshot para undo
+            if not self._is_restoring:
+                self._undo_stack.append(self._snapshot())
+                self._redo_stack.clear()
+
+            # 2) aplica ao bloco
+            ac = bloco["_run_macro_buffer"][-1]
+            bloco["acao"] = ac
+            # apaga label antigo
+            if bloco.get("label_id"):
+                self.canvas.delete(bloco["label_id"])
+            # desenha novo label
+            bx, by = bloco["x"], bloco["y"]
+            w, h   = bloco["width"], bloco["height"]
+            nome = os.path.basename(ac["path"])
+            bloco["label_id"] = self.canvas.create_text(
+                bx + w/2, by + h + 8,
+                text=f"Run Macro: {nome}",
+                font=("Arial", 9), fill="black"
+            )
+
+        # chama nosso diálogo
+        add_run_macro(
+            actions     = bloco["_run_macro_buffer"],
+            update_list = finish,
+            tela        = self.app.root,
+            initial     = bloco.get("acao", {})
+        )
+
     def _on_canvas_double_click(self, event):
         # coordenadas do clique no canvas
         x, y = self.canvas.canvasx(event.x), self.canvas.canvasy(event.y)
@@ -1569,6 +1608,7 @@ class BlocoManager:
                 "end thread"  : self._on_double_click_endthread,
                 "text_to_sheet": self._on_double_click_text_to_sheet,
                 "telegram command": self._on_double_click_telegram_command,
+                "run macro": self._on_double_click_run_macro,
             }
     
             if tipo in mapa:

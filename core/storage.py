@@ -127,7 +127,7 @@ def salvar_macro_gui():
     2. Caso contrário, pergunta o nome da macro (se ainda não houver) e
        move o JSON + imagens para a pasta `Macros/<nome>/`.
     """
-    global caminho_arquivo_tmp
+    global caminho_arquivo_tmp, caminho_macro_real
 
     # ---------------- caso 1: já é uma macro existente ----------------
     if caminho_arquivo_tmp and macro_em_pasta_macros(caminho_arquivo_tmp):
@@ -181,15 +181,15 @@ def salvar_macro_gui():
     final_path = os.path.join(destino_dir, "macro.json")
     limpar_tmp()
     caminho_arquivo_tmp = final_path
-    caminho_macro_real  = final_path      # <<< NOVO
+    caminho_macro_real  = final_path      # agora modifica a variável global
     messagebox.showinfo("Salvo", f"Macro salva em: {final_path}")
     os.makedirs(destino_dir, exist_ok=True)
     with open(final_path, "w", encoding="utf-8") as fo:
         json.dump(data, fo, ensure_ascii=False, indent=2)
 
-    limpar_tmp()
-    caminho_arquivo_tmp = final_path
-    messagebox.showinfo("Salvo", f"Macro salva em: {final_path}")
+    #limpar_tmp()
+    #caminho_arquivo_tmp = final_path
+    #messagebox.showinfo("Salvo", f"Macro salva em: {final_path}")
     return final_path
 
 # ============================================================

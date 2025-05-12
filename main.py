@@ -74,7 +74,7 @@ def _formatar_rotulo(params: dict) -> str:
 class FlowchartApp:
     def __init__(self, root):
         self.root = root
-        self.root.title("TraderAutoSuite v0.8.2")
+        self.root.title("TraderAutoSuite v0.9.3")
         # ---------------- layout da janela -----------------
         largura_janela, altura_janela = 1400, 890
         largura_tela  = root.winfo_screenwidth()
@@ -382,6 +382,7 @@ class FlowchartApp:
             ("End Thread",  "threadend_icon.png"),
             ("text_to_sheet","text_to_sheet_icon.png"),
             ("Telegram Command","telegram_command_icon.png"),
+            ("Run Macro",       "run_macro_icon.png"),
         ]
         for nome, arquivo in botoes_icone:
             caminho = os.path.join("icons", arquivo)
@@ -492,10 +493,15 @@ class FlowchartApp:
     # -----------------------------------------------------
     # Carregar macro (JSON)
     # -----------------------------------------------------
-    def _acao_carregar(self):
-        path = filedialog.askopenfilename(filetypes=[("JSON", "*.json")], title="Abrir macro")
-        if not path:
-            return
+    def _acao_carregar(self, path=None):
+        # Se veio um path por argumento, usa-o; senão, pergunta ao usuário
+        if path is None:
+            path = filedialog.askopenfilename(
+                filetypes=[("JSON", "*.json")],
+                title="Abrir macro"
+            )
+            if not path:
+                return
         try:
             with open(path, "r", encoding="utf-8") as f:
                 data = json.load(f)

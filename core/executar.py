@@ -618,6 +618,25 @@ def _run_branch(blocks, next_map, json_path, start_block,
                 current = default_outs[0] if default_outs else None
                 continue
 
+            # ───── Run Macro (aninhada) ─────
+            elif tipo == "run_macro":
+                nested = ac.get("path", "").strip()
+                if nested and os.path.isfile(nested):
+                    print(f"[DEBUG][{disp_name}] Executando macro aninhada: {nested}")
+                    # executa a macro selecionada, repassando callbacks e stop_event
+                    executar_macro_flow(
+                        nested,
+                        progress_callback,
+                        label_callback,
+                        stop_event
+                    )
+                else:
+                    print(f"[WARN][{disp_name}] Caminho de macro inválido: {nested}")
+                # depois da execução, segue o fluxo padrão
+                default_outs = next_map[current].get("default", [])
+                current = default_outs[0] if default_outs else None
+                continue
+
 
             # (outros tipos como loopstart/loopend/goto/label
             #  podem ser implementados usando next_map)
