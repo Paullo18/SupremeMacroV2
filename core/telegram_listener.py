@@ -8,6 +8,8 @@ from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
 
 from telegram.ext import MessageHandler, filters
 
+import core.storage as storage
+
 # Paths
 _BASE_DIR = os.path.dirname(os.path.dirname(__file__))  # raiz do projeto
 _SETTINGS_PATH = os.path.join(_BASE_DIR, "settings.json")
@@ -107,15 +109,33 @@ async def _on_stopmacro(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # Handler para disparar remote_control
 async def _on_command(update, context):
-    txt = update.message.text.strip()
-    import core.storage as storage
-    if hasattr(storage, "remote_waiters") and txt in storage.remote_waiters:
-        # desenfileira todos os eventos esperando por este comando
-        for evt in list(storage.remote_waiters[txt]):
-            evt.set()
-        await context.bot.send_message(update.effective_chat.id,
-            f"✅ Comando remoto '{txt}' recebido! Continuando macro...")
+    """
+    Libera blocos `telegram_command` quando o texto do comando
+    coincidir com o configurado na macro – funciona em chat privado
+    e em grupos (onde o Telegram adiciona "@BotUserName").
+    """
+    if not update.message:          # segurança contra updates sem texto
+        return
 
+    raw = update.message.text.strip()
+
+    # ── 1) pegue só a primeira 'palavra'
+    #     (ex.: "/closetrade@BOT arg1 arg2" → "/closetrade@BOT")
+    token = raw.split()[0]
+
+    # ── 2) remova "@UserName" se existir e normalize p/ minúsculas
+    cmd = token.split("@")[0].lower()
+
+    # ── 3) acione os waiters correspondentes
+    import core.storage as storage
+    if hasattr(storage, "remote_waiters") and cmd in storage.remote_waiters:
+        for evt in list(storage.remote_waiters[cmd]):
+            evt.set()
+
+        await context.bot.send_message(
+            update.effective_chat.id,
+            f"✅ Comando remoto '{cmd}' recebido!"
+        )
 
     # Registra comandos de início e parada
 
