@@ -1,0 +1,450 @@
+{
+  "macro_name": "v1 - BackUp - Copy",
+  "blocks": [
+    {
+      "id": 984,
+      "type": "OCR",
+      "params": {
+        "type": "ocr",
+        "x": 44,
+        "y": 916,
+        "w": 202,
+        "h": 66,
+        "text": "Open",
+        "verificar_vazio": false,
+        "name": "CheckSignal"
+      },
+      "x": 260.0,
+      "y": -206.0
+    },
+    {
+      "id": 985,
+      "type": "Clique",
+      "params": {
+        "type": "click",
+        "x": 768,
+        "y": 373,
+        "name": "Click on Quantity",
+        "mode": "Simples"
+      },
+      "x": 412.0,
+      "y": -206.0
+    },
+    {
+      "id": 986,
+      "type": "GoTo",
+      "params": {
+        "type": "goto",
+        "label": "CheckSignal"
+      },
+      "x": 260.0,
+      "y": -39.0
+    },
+    {
+      "id": 987,
+      "type": "Label",
+      "params": {
+        "type": "label",
+        "name": "CheckSignal"
+      },
+      "x": 260.0,
+      "y": -278.0
+    },
+    {
+      "id": 991,
+      "type": "Texto",
+      "params": {
+        "type": "text",
+        "content": "1000",
+        "name": "TypeTradeValue"
+      },
+      "x": 573.0,
+      "y": -206.0
+    },
+    {
+      "id": 992,
+      "type": "OCR",
+      "params": {
+        "type": "ocr",
+        "x": 57,
+        "y": 978,
+        "w": 188,
+        "h": 46,
+        "text": "Long",
+        "verificar_vazio": false,
+        "name": "CheckSignalType"
+      },
+      "x": 728.0,
+      "y": -206.0
+    },
+    {
+      "id": 993,
+      "type": "Clique",
+      "params": {
+        "type": "click",
+        "x": 769,
+        "y": 642,
+        "name": "OpenLong",
+        "mode": "Simples"
+      },
+      "x": 728.0,
+      "y": -276.0
+    },
+    {
+      "id": 994,
+      "type": "Clique",
+      "params": {
+        "type": "click",
+        "x": 855,
+        "y": 644,
+        "name": "OpenShort",
+        "mode": "Simples"
+      },
+      "x": 728.0,
+      "y": -128.0
+    },
+    {
+      "id": 996,
+      "type": "Label",
+      "params": {
+        "type": "label",
+        "name": "CheckStop"
+      },
+      "x": 1196.0,
+      "y": -300.0
+    },
+    {
+      "id": 997,
+      "type": "OCR",
+      "params": {
+        "type": "ocr",
+        "x": 52,
+        "y": 935,
+        "w": 191,
+        "h": 46,
+        "text": "Stop",
+        "verificar_vazio": false,
+        "name": "CheckStop"
+      },
+      "x": 1196.0,
+      "y": -108.0
+    },
+    {
+      "id": 1011,
+      "type": "GoTo",
+      "params": {
+        "type": "goto",
+        "label": "CheckStop"
+      },
+      "x": 1261.0,
+      "y": -9.0
+    },
+    {
+      "id": 1015,
+      "type": "Start Thread",
+      "params": {
+        "type": "startthread",
+        "thread_name": "Signal Detected",
+        "forks": {
+          "996": "Continuar Fluxo",
+          "1018": "Nova Thread"
+        }
+      },
+      "x": 1037.0,
+      "y": -300.0
+    },
+    {
+      "id": 1017,
+      "type": "Screenshot",
+      "params": {
+        "type": "screenshot",
+        "mode": "region",
+        "region": {
+          "x": 702,
+          "y": 837,
+          "w": 955,
+          "h": 204
+        },
+        "save_to": "telegram",
+        "path_mode": "default",
+        "custom_path": "",
+        "token": "8175439343:AAE6HIVlnoGokSiEudlDzPIYiOv_dkS5ykQ",
+        "chat_id": "-1002633076439",
+        "bot_name": "SOL_USDT_SINAIS",
+        "custom_message_enabled": true,
+        "custom_message": "Entrada Detectada!!!",
+        "name": "SendTradeOpen"
+      },
+      "x": 1196.0,
+      "y": -374.0
+    },
+    {
+      "id": 1018,
+      "type": "Delay",
+      "params": {
+        "type": "delay",
+        "time": 2000,
+        "ms": 0,
+        "ms2": 0
+      },
+      "x": 1037.0,
+      "y": -374.0
+    },
+    {
+      "id": 1024,
+      "type": "OCR",
+      "params": {
+        "type": "ocr",
+        "x": 714,
+        "y": 888,
+        "w": 119,
+        "h": 26,
+        "text": "Perpetual",
+        "verificar_vazio": false,
+        "name": "Check Open"
+      },
+      "x": 121.0,
+      "y": -206.0
+    },
+    {
+      "id": 1027,
+      "type": "GoTo",
+      "params": {
+        "type": "goto",
+        "label": "CheckStop"
+      },
+      "x": 121.0,
+      "y": -281.0
+    },
+    {
+      "id": 1039,
+      "type": "Delay",
+      "params": {
+        "type": "delay",
+        "time": 200,
+        "ms": 0,
+        "ms2": 200
+      },
+      "x": 1196.0,
+      "y": -208.0
+    },
+    {
+      "id": 1041,
+      "type": "Delay",
+      "params": {
+        "type": "delay",
+        "time": 200,
+        "ms": 200,
+        "ms2": 0
+      },
+      "x": 260.0,
+      "y": -121.0
+    },
+    {
+      "id": 1042,
+      "type": "OCR",
+      "params": {
+        "type": "ocr",
+        "x": 710,
+        "y": 887,
+        "w": 126,
+        "h": 27,
+        "text": "Perpetual",
+        "verificar_vazio": false,
+        "name": "CheckTradeOpen"
+      },
+      "x": 1037.0,
+      "y": -206.0
+    },
+    {
+      "id": 1044,
+      "type": "GoTo",
+      "params": {
+        "type": "goto",
+        "label": "CheckSignal"
+      },
+      "x": 1037.0,
+      "y": -106.0
+    },
+    {
+      "id": 1045,
+      "type": "Delay",
+      "params": {
+        "type": "delay",
+        "time": 3000,
+        "ms": 0,
+        "ms2": 0
+      },
+      "x": 888.0,
+      "y": -206.0
+    },
+    {
+      "id": 1078,
+      "type": "Run Macro",
+      "params": {
+        "type": "run_macro",
+        "path": "C:/Users/menic/OneDrive/Documentos/GitHub/SupremeMacroV2/macros/v1 - BackUp - Copy/close_trade_macro.json"
+      },
+      "x": 1128.0,
+      "y": -9.0
+    }
+  ],
+  "connections": [
+    {
+      "from": 985,
+      "to": 991,
+      "branch": null,
+      "color": "#000"
+    },
+    {
+      "from": 991,
+      "to": 992,
+      "branch": null,
+      "color": "#000"
+    },
+    {
+      "from": 984,
+      "to": 985,
+      "branch": null,
+      "color": "#000"
+    },
+    {
+      "from": 992,
+      "to": 993,
+      "branch": null,
+      "color": "#000"
+    },
+    {
+      "from": 992,
+      "to": 994,
+      "branch": null,
+      "color": "#000"
+    },
+    {
+      "from": 997,
+      "to": 1011,
+      "branch": null,
+      "color": "#000"
+    },
+    {
+      "from": 1018,
+      "to": 1017,
+      "branch": null,
+      "color": "#000"
+    },
+    {
+      "from": 997,
+      "to": 1011,
+      "branch": "false",
+      "color": "red"
+    },
+    {
+      "from": 992,
+      "to": 993,
+      "branch": "true",
+      "color": "green"
+    },
+    {
+      "from": 992,
+      "to": 994,
+      "branch": "false",
+      "color": "red"
+    },
+    {
+      "from": 984,
+      "to": 985,
+      "branch": "true",
+      "color": "green"
+    },
+    {
+      "from": 1015,
+      "to": 996,
+      "branch": null,
+      "color": "#000"
+    },
+    {
+      "from": 1015,
+      "to": 1018,
+      "branch": null,
+      "color": "#0a84ff"
+    },
+    {
+      "from": 987,
+      "to": 984,
+      "branch": null,
+      "color": "#000"
+    },
+    {
+      "from": 1024,
+      "to": 984,
+      "branch": "false",
+      "color": "red"
+    },
+    {
+      "from": 996,
+      "to": 1039,
+      "branch": null,
+      "color": "#000"
+    },
+    {
+      "from": 1039,
+      "to": 997,
+      "branch": null,
+      "color": "#000"
+    },
+    {
+      "from": 1041,
+      "to": 986,
+      "branch": null,
+      "color": "#000"
+    },
+    {
+      "from": 984,
+      "to": 1041,
+      "branch": "false",
+      "color": "red"
+    },
+    {
+      "from": 1042,
+      "to": 1044,
+      "branch": "false",
+      "color": "red"
+    },
+    {
+      "from": 993,
+      "to": 1045,
+      "branch": null,
+      "color": "#000"
+    },
+    {
+      "from": 994,
+      "to": 1045,
+      "branch": null,
+      "color": "#000"
+    },
+    {
+      "from": 1045,
+      "to": 1042,
+      "branch": null,
+      "color": "#000"
+    },
+    {
+      "from": 1042,
+      "to": 1015,
+      "branch": "true",
+      "color": "green"
+    },
+    {
+      "from": 1024,
+      "to": 1027,
+      "branch": "true",
+      "color": "green"
+    },
+    {
+      "from": 997,
+      "to": 1078,
+      "branch": "true",
+      "color": "green"
+    }
+  ]
+}

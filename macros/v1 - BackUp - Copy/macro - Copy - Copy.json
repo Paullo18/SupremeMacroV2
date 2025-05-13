@@ -1,0 +1,1594 @@
+{
+  "macro_name": "v1 - BackUp",
+  "blocks": [
+    {
+      "id": 982,
+      "type": "Start Thread",
+      "params": {
+        "type": "startthread",
+        "thread_name": "Fluxo Principal",
+        "forks": {
+          "983": "Nova Thread",
+          "1024": "Continuar Fluxo"
+        }
+      },
+      "x": 29.0,
+      "y": 262.0
+    },
+    {
+      "id": 983,
+      "type": "Start Thread",
+      "params": {
+        "type": "startthread",
+        "thread_name": "Atualiza Chart",
+        "forks": {
+          "988": "Continuar Fluxo",
+          "1021": "Nova Thread"
+        }
+      },
+      "x": 29.0,
+      "y": 132.0
+    },
+    {
+      "id": 984,
+      "type": "OCR",
+      "params": {
+        "type": "ocr",
+        "x": 185,
+        "y": 865,
+        "w": 185,
+        "h": 74,
+        "text": "Open",
+        "verificar_vazio": false,
+        "name": "ChecaSinal"
+      },
+      "x": 305.0,
+      "y": 262.0
+    },
+    {
+      "id": 985,
+      "type": "Clique",
+      "params": {
+        "type": "click",
+        "x": 768,
+        "y": 373,
+        "name": "Clica no Campo de Quantidade",
+        "mode": "Simples"
+      },
+      "x": 457.0,
+      "y": 262.0
+    },
+    {
+      "id": 986,
+      "type": "GoTo",
+      "params": {
+        "type": "goto",
+        "label": "ChecaSinal",
+        "name": "ChecaSinal"
+      },
+      "x": 305.0,
+      "y": 429.0
+    },
+    {
+      "id": 987,
+      "type": "Label",
+      "params": {
+        "type": "label",
+        "name": "ChecaSinal"
+      },
+      "x": 305.0,
+      "y": 190.0
+    },
+    {
+      "id": 988,
+      "type": "Label",
+      "params": {
+        "type": "label",
+        "name": "AtualizaChart"
+      },
+      "x": 220.0,
+      "y": 132.0
+    },
+    {
+      "id": 989,
+      "type": "GoTo",
+      "params": {
+        "type": "goto",
+        "label": "AtualizaChart",
+        "name": "AtualizaChart"
+      },
+      "x": 694.0,
+      "y": 132.0
+    },
+    {
+      "id": 990,
+      "type": "Delay",
+      "params": {
+        "type": "delay",
+        "time": 3600000,
+        "ms": 0,
+        "ms2": 0,
+        "name": "1 Hora"
+      },
+      "x": 537.0,
+      "y": 132.0
+    },
+    {
+      "id": 991,
+      "type": "Texto",
+      "params": {
+        "type": "text",
+        "content": "1000",
+        "name": "Digita Valor do Trade"
+      },
+      "x": 618.0,
+      "y": 262.0
+    },
+    {
+      "id": 992,
+      "type": "OCR",
+      "params": {
+        "type": "ocr",
+        "x": 184,
+        "y": 923,
+        "w": 192,
+        "h": 58,
+        "text": "Long",
+        "verificar_vazio": false,
+        "name": "ChecaTipoSinal"
+      },
+      "x": 773.0,
+      "y": 262.0
+    },
+    {
+      "id": 993,
+      "type": "Clique",
+      "params": {
+        "type": "click",
+        "x": 769,
+        "y": 642,
+        "name": "AbreLong",
+        "mode": "Simples"
+      },
+      "x": 773.0,
+      "y": 192.0
+    },
+    {
+      "id": 994,
+      "type": "Clique",
+      "params": {
+        "type": "click",
+        "x": 855,
+        "y": 644,
+        "name": "AbreShort",
+        "mode": "Simples"
+      },
+      "x": 773.0,
+      "y": 340.0
+    },
+    {
+      "id": 995,
+      "type": "Label",
+      "params": {
+        "type": "label",
+        "name": "ChecaStopL"
+      },
+      "x": 1320.0,
+      "y": 128.0
+    },
+    {
+      "id": 996,
+      "type": "Label",
+      "params": {
+        "type": "label",
+        "name": "ChecaStopS"
+      },
+      "x": 1321.0,
+      "y": 395.0
+    },
+    {
+      "id": 997,
+      "type": "OCR",
+      "params": {
+        "type": "ocr",
+        "x": 171,
+        "y": 970,
+        "w": 226,
+        "h": 71,
+        "text": "Short",
+        "verificar_vazio": false,
+        "name": "ChegaStop"
+      },
+      "x": 1513.0,
+      "y": 428.0
+    },
+    {
+      "id": 998,
+      "type": "OCR",
+      "params": {
+        "type": "ocr",
+        "x": 179,
+        "y": 967,
+        "w": 218,
+        "h": 77,
+        "text": "Long",
+        "verificar_vazio": false,
+        "name": "ChecaStop"
+      },
+      "x": 1511.0,
+      "y": 101.0
+    },
+    {
+      "id": 999,
+      "type": "Label",
+      "params": {
+        "type": "label",
+        "name": "UpdateTrade"
+      },
+      "x": 219.0,
+      "y": 53.0
+    },
+    {
+      "id": 1000,
+      "type": "Delay",
+      "params": {
+        "type": "delay",
+        "time": 600000,
+        "ms": 0,
+        "ms2": 0,
+        "name": "10 Minutos"
+      },
+      "x": 376.0,
+      "y": 52.0
+    },
+    {
+      "id": 1001,
+      "type": "Screenshot",
+      "params": {
+        "type": "screenshot",
+        "mode": "region",
+        "region": {
+          "x": 704,
+          "y": 838,
+          "w": 954,
+          "h": 202
+        },
+        "save_to": "telegram",
+        "path_mode": "default",
+        "custom_path": "",
+        "token": "8175439343:AAE6HIVlnoGokSiEudlDzPIYiOv_dkS5ykQ",
+        "chat_id": "-1002633076439",
+        "bot_name": "SOL_USDT_SINAIS",
+        "custom_message_enabled": true,
+        "custom_message": "Update Trade!",
+        "name": "UpdateTrade"
+      },
+      "x": 696.0,
+      "y": 52.0
+    },
+    {
+      "id": 1002,
+      "type": "GoTo",
+      "params": {
+        "type": "goto",
+        "label": "UpdateTrade",
+        "name": "UpdateTrade"
+      },
+      "x": 839.0,
+      "y": 52.0
+    },
+    {
+      "id": 1003,
+      "type": "Label",
+      "params": {
+        "type": "label",
+        "name": "FecharTrade"
+      },
+      "x": 430.0,
+      "y": 428.0
+    },
+    {
+      "id": 1004,
+      "type": "Clique",
+      "params": {
+        "type": "click",
+        "x": 1453,
+        "y": 908,
+        "name": "FechaTrade",
+        "mode": "Simples"
+      },
+      "x": 746.0,
+      "y": 428.0
+    },
+    {
+      "id": 1005,
+      "type": "Screenshot",
+      "params": {
+        "type": "screenshot",
+        "mode": "region",
+        "region": {
+          "x": 1660,
+          "y": 235,
+          "w": 249,
+          "h": 243
+        },
+        "save_to": "telegram",
+        "path_mode": "default",
+        "custom_path": "",
+        "token": "8175439343:AAE6HIVlnoGokSiEudlDzPIYiOv_dkS5ykQ",
+        "chat_id": "-1002633076439",
+        "bot_name": "SOL_USDT_SINAIS",
+        "custom_message_enabled": true,
+        "custom_message": "Trade Closed!",
+        "name": "EnviaPNL"
+      },
+      "x": 644.0,
+      "y": 342.0
+    },
+    {
+      "id": 1006,
+      "type": "Delay",
+      "params": {
+        "type": "delay",
+        "time": 1000,
+        "ms": 0,
+        "ms2": 0
+      },
+      "x": 906.0,
+      "y": 428.0
+    },
+    {
+      "id": 1007,
+      "type": "Clique",
+      "params": {
+        "type": "click",
+        "x": 1453,
+        "y": 911,
+        "name": "ReforçaFechamento",
+        "mode": "Simples"
+      },
+      "x": 1058.0,
+      "y": 428.0
+    },
+    {
+      "id": 1008,
+      "type": "GoTo",
+      "params": {
+        "type": "goto",
+        "label": "ChecaSinal",
+        "name": "ChecaSinal"
+      },
+      "x": 1195.0,
+      "y": 428.0
+    },
+    {
+      "id": 1009,
+      "type": "GoTo",
+      "params": {
+        "type": "goto",
+        "label": "ChecaStopL",
+        "name": "ChecaStopL"
+      },
+      "x": 1569.0,
+      "y": 182.0
+    },
+    {
+      "id": 1010,
+      "type": "GoTo",
+      "params": {
+        "type": "goto",
+        "label": "FecharTrade",
+        "name": "FecharTrade"
+      },
+      "x": 1450.0,
+      "y": 181.0
+    },
+    {
+      "id": 1011,
+      "type": "GoTo",
+      "params": {
+        "type": "goto",
+        "label": "ChecaStopS",
+        "name": "ChecaStopS"
+      },
+      "x": 1572.0,
+      "y": 353.0
+    },
+    {
+      "id": 1012,
+      "type": "GoTo",
+      "params": {
+        "type": "goto",
+        "label": "FecharTrade",
+        "name": "FecharTrade"
+      },
+      "x": 1452.0,
+      "y": 353.0
+    },
+    {
+      "id": 1013,
+      "type": "Start Thread",
+      "params": {
+        "type": "startthread",
+        "thread_name": "Fecha Trade",
+        "forks": {
+          "1004": "Continuar Fluxo",
+          "1005": "Nova Thread",
+          "1040": "Nova Thread"
+        }
+      },
+      "x": 586.0,
+      "y": 428.0
+    },
+    {
+      "id": 1014,
+      "type": "Start Thread",
+      "params": {
+        "type": "startthread",
+        "thread_name": "Entrada Detectada Long",
+        "forks": {
+          "995": "Continuar Fluxo",
+          "1018": "Nova Thread"
+        }
+      },
+      "x": 1320.0,
+      "y": 216.0
+    },
+    {
+      "id": 1015,
+      "type": "Start Thread",
+      "params": {
+        "type": "startthread",
+        "thread_name": "Entrada Detectada Short",
+        "forks": {
+          "996": "Continuar Fluxo",
+          "1018": "Nova Thread"
+        }
+      },
+      "x": 1321.0,
+      "y": 309.0
+    },
+    {
+      "id": 1016,
+      "type": "Screenshot",
+      "params": {
+        "type": "screenshot",
+        "mode": "region",
+        "region": {
+          "x": 53,
+          "y": 160,
+          "w": 603,
+          "h": 825
+        },
+        "save_to": "telegram",
+        "path_mode": "default",
+        "custom_path": "",
+        "token": "8175439343:AAE6HIVlnoGokSiEudlDzPIYiOv_dkS5ykQ",
+        "chat_id": "-1002633076439",
+        "bot_name": "SOL_USDT_SINAIS",
+        "custom_message_enabled": true,
+        "custom_message": "Chart Update!",
+        "name": "UpdateChart"
+      },
+      "x": 378.0,
+      "y": 132.0
+    },
+    {
+      "id": 1017,
+      "type": "Screenshot",
+      "params": {
+        "type": "screenshot",
+        "mode": "region",
+        "region": {
+          "x": 702,
+          "y": 837,
+          "w": 955,
+          "h": 204
+        },
+        "save_to": "telegram",
+        "path_mode": "default",
+        "custom_path": "",
+        "token": "8175439343:AAE6HIVlnoGokSiEudlDzPIYiOv_dkS5ykQ",
+        "chat_id": "-1002633076439",
+        "bot_name": "SOL_USDT_SINAIS",
+        "custom_message_enabled": true,
+        "custom_message": "Entrada Detectada!!!",
+        "name": "Entrada Detectada"
+      },
+      "x": 1626.0,
+      "y": 262.0
+    },
+    {
+      "id": 1018,
+      "type": "Delay",
+      "params": {
+        "type": "delay",
+        "time": 2000,
+        "ms": 0,
+        "ms2": 0
+      },
+      "x": 1466.0,
+      "y": 262.0
+    },
+    {
+      "id": 1019,
+      "type": "OCR",
+      "params": {
+        "type": "ocr",
+        "x": 713,
+        "y": 888,
+        "w": 120,
+        "h": 24,
+        "text": "Perpetual",
+        "verificar_vazio": false,
+        "name": "ChecaAberto"
+      },
+      "x": 534.0,
+      "y": 52.0
+    },
+    {
+      "id": 1020,
+      "type": "GoTo",
+      "params": {
+        "type": "goto",
+        "label": "UpdateTrade",
+        "name": "UpdateTrade"
+      },
+      "x": 534.0,
+      "y": -48.0
+    },
+    {
+      "id": 1021,
+      "type": "Start Thread",
+      "params": {
+        "type": "startthread",
+        "thread_name": "UpdateTrade",
+        "forks": {
+          "999": "Continuar Fluxo",
+          "1028": "Nova Thread"
+        }
+      },
+      "x": 29.0,
+      "y": 53.0
+    },
+    {
+      "id": 1022,
+      "type": "OCR",
+      "params": {
+        "type": "ocr",
+        "x": 709,
+        "y": 886,
+        "w": 125,
+        "h": 28,
+        "text": "Perpetual",
+        "verificar_vazio": false,
+        "name": "ChecaAberto"
+      },
+      "x": 376.0,
+      "y": -48.0
+    },
+    {
+      "id": 1023,
+      "type": "Delay",
+      "params": {
+        "type": "delay",
+        "time": 10000,
+        "ms": 0,
+        "ms2": 0,
+        "name": "10 Segundos"
+      },
+      "x": 219.0,
+      "y": -48.0
+    },
+    {
+      "id": 1024,
+      "type": "OCR",
+      "params": {
+        "type": "ocr",
+        "x": 714,
+        "y": 888,
+        "w": 119,
+        "h": 26,
+        "text": "Perpetual",
+        "verificar_vazio": false,
+        "name": "Checa se Aberto"
+      },
+      "x": 167.0,
+      "y": 262.0
+    },
+    {
+      "id": 1025,
+      "type": "OCR",
+      "params": {
+        "type": "ocr",
+        "x": 715,
+        "y": 910,
+        "w": 74,
+        "h": 24,
+        "text": "Long",
+        "verificar_vazio": false,
+        "name": "Checa Posicao Aberta"
+      },
+      "x": 167.0,
+      "y": 346.0
+    },
+    {
+      "id": 1026,
+      "type": "GoTo",
+      "params": {
+        "type": "goto",
+        "label": "ChecaStopL"
+      },
+      "x": 34.0,
+      "y": 346.0
+    },
+    {
+      "id": 1027,
+      "type": "GoTo",
+      "params": {
+        "type": "goto",
+        "label": "ChecaStopS"
+      },
+      "x": 167.0,
+      "y": 428.0
+    },
+    {
+      "id": 1028,
+      "type": "Start Thread",
+      "params": {
+        "type": "startthread",
+        "thread_name": "UpdateDias",
+        "forks": {
+          "1035": "Continuar Fluxo",
+          "1047": "Nova Thread"
+        }
+      },
+      "x": 29.0,
+      "y": -127.0
+    },
+    {
+      "id": 1029,
+      "type": "Delay",
+      "params": {
+        "type": "delay",
+        "time": 60000,
+        "ms": 0,
+        "ms2": 0,
+        "name": "5 Minutos"
+      },
+      "x": 337.0,
+      "y": -127.0
+    },
+    {
+      "id": 1030,
+      "type": "Clique",
+      "params": {
+        "type": "click",
+        "x": 261,
+        "y": 333
+      },
+      "x": 498.0,
+      "y": -127.0
+    },
+    {
+      "id": 1031,
+      "type": "Clique",
+      "params": {
+        "type": "click",
+        "x": 470,
+        "y": 337
+      },
+      "x": 651.0,
+      "y": -127.0
+    },
+    {
+      "id": 1032,
+      "type": "Clique",
+      "params": {
+        "type": "click",
+        "x": 348,
+        "y": 529
+      },
+      "x": 809.0,
+      "y": -127.0
+    },
+    {
+      "id": 1033,
+      "type": "Clique",
+      "params": {
+        "type": "click",
+        "x": 432,
+        "y": 546,
+        "mode": "Simples"
+      },
+      "x": 1260.0,
+      "y": -127.0
+    },
+    {
+      "id": 1034,
+      "type": "GoTo",
+      "params": {
+        "type": "goto",
+        "label": "UpdateDias"
+      },
+      "x": 1540.0,
+      "y": -128.0
+    },
+    {
+      "id": 1035,
+      "type": "Label",
+      "params": {
+        "type": "label",
+        "name": "UpdateDias"
+      },
+      "x": 179.0,
+      "y": -127.0
+    },
+    {
+      "id": 1036,
+      "type": "Delay",
+      "params": {
+        "type": "delay",
+        "time": 100,
+        "ms": 0,
+        "ms2": 100
+      },
+      "x": 954.0,
+      "y": -127.0
+    },
+    {
+      "id": 1037,
+      "type": "Clique",
+      "params": {
+        "type": "click",
+        "x": 346,
+        "y": 532
+      },
+      "x": 1113.0,
+      "y": -127.0
+    },
+    {
+      "id": 1038,
+      "type": "Delay",
+      "params": {
+        "type": "delay",
+        "time": 200,
+        "ms": 0,
+        "ms2": 200
+      },
+      "x": 1320.0,
+      "y": 49.0
+    },
+    {
+      "id": 1039,
+      "type": "Delay",
+      "params": {
+        "type": "delay",
+        "time": 200,
+        "ms": 0,
+        "ms2": 200
+      },
+      "x": 1321.0,
+      "y": 469.0
+    },
+    {
+      "id": 1040,
+      "type": "text_to_sheet",
+      "params": {
+        "type": "text_to_sheet",
+        "x": 1758,
+        "y": 236,
+        "w": 90,
+        "h": 32,
+        "scale": 1,
+        "sheet": "Controle Estrategia 1",
+        "column": "B1",
+        "tab_id": 0
+      },
+      "x": 526.0,
+      "y": 342.0
+    },
+    {
+      "id": 1041,
+      "type": "Delay",
+      "params": {
+        "type": "delay",
+        "time": 200,
+        "ms": 200,
+        "ms2": 0
+      },
+      "x": 305.0,
+      "y": 347.0
+    },
+    {
+      "id": 1042,
+      "type": "OCR",
+      "params": {
+        "type": "ocr",
+        "x": 710,
+        "y": 887,
+        "w": 126,
+        "h": 27,
+        "text": "Perpetual",
+        "verificar_vazio": false,
+        "name": "ChecaSeAbriu"
+      },
+      "x": 1042.0,
+      "y": 173.0
+    },
+    {
+      "id": 1043,
+      "type": "OCR",
+      "params": {
+        "type": "ocr",
+        "x": 748,
+        "y": 910,
+        "w": 45,
+        "h": 25,
+        "text": "Long",
+        "verificar_vazio": false,
+        "name": "ChecaPosicao"
+      },
+      "x": 1122.0,
+      "y": 263.0
+    },
+    {
+      "id": 1044,
+      "type": "GoTo",
+      "params": {
+        "type": "goto",
+        "label": "ChecaSinal"
+      },
+      "x": 1042.0,
+      "y": 94.0
+    },
+    {
+      "id": 1045,
+      "type": "Delay",
+      "params": {
+        "type": "delay",
+        "time": 3000,
+        "ms": 0,
+        "ms2": 0
+      },
+      "x": 956.0,
+      "y": 262.0
+    },
+    {
+      "id": 1046,
+      "type": "Start Thread",
+      "params": {
+        "type": "startthread",
+        "thread_name": "T. CloseTrade",
+        "forks": {
+          "1051": "Continuar Fluxo"
+        }
+      },
+      "x": 29.0,
+      "y": -285.0
+    },
+    {
+      "id": 1047,
+      "type": "Start Thread",
+      "params": {
+        "type": "startthread",
+        "thread_name": "T. UpdateTrade",
+        "forks": {
+          "1046": "Nova Thread",
+          "1052": "Continuar Fluxo"
+        }
+      },
+      "x": 29.0,
+      "y": -210.0
+    },
+    {
+      "id": 1048,
+      "type": "Telegram Command",
+      "params": {
+        "type": "telegram_command",
+        "name": "T. UpdateTrade",
+        "command": "/updatetrade"
+      },
+      "x": 336.0,
+      "y": -210.0
+    },
+    {
+      "id": 1049,
+      "type": "Telegram Command",
+      "params": {
+        "type": "telegram_command",
+        "name": "T. CloseTrade",
+        "command": "/closetrade"
+      },
+      "x": 334.0,
+      "y": -285.0
+    },
+    {
+      "id": 1050,
+      "type": "Clique",
+      "params": {
+        "type": "click",
+        "x": 1453,
+        "y": 908,
+        "mode": "Simples"
+      },
+      "x": 810.0,
+      "y": -285.0
+    },
+    {
+      "id": 1051,
+      "type": "Label",
+      "params": {
+        "type": "label",
+        "name": "T. CloseTrade"
+      },
+      "x": 184.0,
+      "y": -285.0
+    },
+    {
+      "id": 1052,
+      "type": "Label",
+      "params": {
+        "type": "label",
+        "name": "T. UpdateTrade"
+      },
+      "x": 188.0,
+      "y": -210.0
+    },
+    {
+      "id": 1053,
+      "type": "GoTo",
+      "params": {
+        "type": "goto",
+        "label": "T. CloseTrade"
+      },
+      "x": 966.0,
+      "y": -285.0
+    },
+    {
+      "id": 1054,
+      "type": "Screenshot",
+      "params": {
+        "type": "screenshot",
+        "mode": "region",
+        "region": {
+          "x": 703,
+          "y": 838,
+          "w": 953,
+          "h": 143
+        },
+        "save_to": "telegram",
+        "path_mode": "default",
+        "custom_path": "",
+        "token": "8175439343:AAE6HIVlnoGokSiEudlDzPIYiOv_dkS5ykQ",
+        "chat_id": "-1002633076439",
+        "bot_name": "SOL_USDT_SINAIS",
+        "custom_message_enabled": false,
+        "custom_message": "",
+        "name": "T. UpdateTrade"
+      },
+      "x": 487.0,
+      "y": -210.0
+    },
+    {
+      "id": 1055,
+      "type": "GoTo",
+      "params": {
+        "type": "goto",
+        "label": "T. UpdateTrade"
+      },
+      "x": 651.0,
+      "y": -210.0
+    },
+    {
+      "id": 1056,
+      "type": "Screenshot",
+      "params": {
+        "type": "screenshot",
+        "mode": "region",
+        "region": {
+          "x": 1660,
+          "y": 238,
+          "w": 250,
+          "h": 236
+        },
+        "save_to": "telegram",
+        "path_mode": "default",
+        "custom_path": "",
+        "token": "8175439343:AAE6HIVlnoGokSiEudlDzPIYiOv_dkS5ykQ",
+        "chat_id": "-1002633076439",
+        "bot_name": "SOL_USDT_SINAIS",
+        "custom_message_enabled": true,
+        "custom_message": "Trade Closed!",
+        "name": "T. EnviaPNL"
+      },
+      "x": 650.0,
+      "y": -285.0
+    },
+    {
+      "id": 1057,
+      "type": "Start Thread",
+      "params": {
+        "type": "startthread",
+        "thread_name": "T. UpdateSheet",
+        "forks": {
+          "1056": "Continuar Fluxo",
+          "1058": "Nova Thread"
+        }
+      },
+      "x": 485.0,
+      "y": -285.0
+    },
+    {
+      "id": 1058,
+      "type": "text_to_sheet",
+      "params": {
+        "type": "text_to_sheet",
+        "x": 1760,
+        "y": 240,
+        "w": 88,
+        "h": 26,
+        "scale": 1,
+        "sheet": "Controle Estrategia 1",
+        "column": "B2",
+        "tab_id": 0
+      },
+      "x": 485.0,
+      "y": -353.0
+    },
+    {
+      "id": 1136,
+      "type": "Clique",
+      "params": {
+        "type": "click",
+        "x": 643,
+        "y": 219,
+        "mode": "Simples"
+      },
+      "x": 1407.0,
+      "y": -127.0
+    }
+  ],
+  "connections": [
+    {
+      "from": 982,
+      "to": 983,
+      "branch": null,
+      "color": "#0a84ff"
+    },
+    {
+      "from": 990,
+      "to": 989,
+      "branch": null,
+      "color": "#000"
+    },
+    {
+      "from": 985,
+      "to": 991,
+      "branch": null,
+      "color": "#000"
+    },
+    {
+      "from": 991,
+      "to": 992,
+      "branch": null,
+      "color": "#000"
+    },
+    {
+      "from": 1001,
+      "to": 1002,
+      "branch": null,
+      "color": "#000"
+    },
+    {
+      "from": 1004,
+      "to": 1006,
+      "branch": null,
+      "color": "#000"
+    },
+    {
+      "from": 1006,
+      "to": 1007,
+      "branch": null,
+      "color": "#000"
+    },
+    {
+      "from": 1007,
+      "to": 1008,
+      "branch": null,
+      "color": "#000"
+    },
+    {
+      "from": 1013,
+      "to": 1004,
+      "branch": null,
+      "color": "#000"
+    },
+    {
+      "from": 1003,
+      "to": 1013,
+      "branch": null,
+      "color": "#000"
+    },
+    {
+      "from": 1013,
+      "to": 1005,
+      "branch": null,
+      "color": "#0a84ff"
+    },
+    {
+      "from": 988,
+      "to": 1016,
+      "branch": null,
+      "color": "#000"
+    },
+    {
+      "from": 1016,
+      "to": 990,
+      "branch": null,
+      "color": "#000"
+    },
+    {
+      "from": 997,
+      "to": 1012,
+      "branch": null,
+      "color": "#000"
+    },
+    {
+      "from": 998,
+      "to": 1010,
+      "branch": null,
+      "color": "#000"
+    },
+    {
+      "from": 998,
+      "to": 1009,
+      "branch": null,
+      "color": "#000"
+    },
+    {
+      "from": 984,
+      "to": 985,
+      "branch": null,
+      "color": "#000"
+    },
+    {
+      "from": 992,
+      "to": 993,
+      "branch": null,
+      "color": "#000"
+    },
+    {
+      "from": 992,
+      "to": 994,
+      "branch": null,
+      "color": "#000"
+    },
+    {
+      "from": 998,
+      "to": 1010,
+      "branch": null,
+      "color": "#000"
+    },
+    {
+      "from": 997,
+      "to": 1012,
+      "branch": null,
+      "color": "#000"
+    },
+    {
+      "from": 998,
+      "to": 1009,
+      "branch": null,
+      "color": "#000"
+    },
+    {
+      "from": 997,
+      "to": 1011,
+      "branch": null,
+      "color": "#000"
+    },
+    {
+      "from": 1018,
+      "to": 1017,
+      "branch": null,
+      "color": "#000"
+    },
+    {
+      "from": 998,
+      "to": 1010,
+      "branch": "true",
+      "color": "green"
+    },
+    {
+      "from": 998,
+      "to": 1010,
+      "branch": "true",
+      "color": "green"
+    },
+    {
+      "from": 998,
+      "to": 1009,
+      "branch": "false",
+      "color": "red"
+    },
+    {
+      "from": 997,
+      "to": 1012,
+      "branch": "true",
+      "color": "green"
+    },
+    {
+      "from": 997,
+      "to": 1011,
+      "branch": "false",
+      "color": "red"
+    },
+    {
+      "from": 992,
+      "to": 993,
+      "branch": "true",
+      "color": "green"
+    },
+    {
+      "from": 992,
+      "to": 994,
+      "branch": "false",
+      "color": "red"
+    },
+    {
+      "from": 984,
+      "to": 985,
+      "branch": "true",
+      "color": "green"
+    },
+    {
+      "from": 1019,
+      "to": 1020,
+      "branch": "false",
+      "color": "red"
+    },
+    {
+      "from": 1019,
+      "to": 1001,
+      "branch": "true",
+      "color": "green"
+    },
+    {
+      "from": 1000,
+      "to": 1019,
+      "branch": null,
+      "color": "#000"
+    },
+    {
+      "from": 1022,
+      "to": 1000,
+      "branch": "true",
+      "color": "green"
+    },
+    {
+      "from": 1022,
+      "to": 1020,
+      "branch": "false",
+      "color": "red"
+    },
+    {
+      "from": 999,
+      "to": 1023,
+      "branch": null,
+      "color": "#000"
+    },
+    {
+      "from": 1023,
+      "to": 1022,
+      "branch": null,
+      "color": "#000"
+    },
+    {
+      "from": 1014,
+      "to": 995,
+      "branch": null,
+      "color": "#000"
+    },
+    {
+      "from": 1014,
+      "to": 1018,
+      "branch": null,
+      "color": "#0a84ff"
+    },
+    {
+      "from": 1015,
+      "to": 996,
+      "branch": null,
+      "color": "#000"
+    },
+    {
+      "from": 1015,
+      "to": 1018,
+      "branch": null,
+      "color": "#0a84ff"
+    },
+    {
+      "from": 1021,
+      "to": 999,
+      "branch": null,
+      "color": "#000"
+    },
+    {
+      "from": 983,
+      "to": 988,
+      "branch": null,
+      "color": "#000"
+    },
+    {
+      "from": 982,
+      "to": 1024,
+      "branch": null,
+      "color": "#000"
+    },
+    {
+      "from": 1025,
+      "to": 1026,
+      "branch": "true",
+      "color": "green"
+    },
+    {
+      "from": 1025,
+      "to": 1027,
+      "branch": "false",
+      "color": "red"
+    },
+    {
+      "from": 987,
+      "to": 984,
+      "branch": null,
+      "color": "#000"
+    },
+    {
+      "from": 983,
+      "to": 1021,
+      "branch": null,
+      "color": "#0a84ff"
+    },
+    {
+      "from": 1021,
+      "to": 1028,
+      "branch": null,
+      "color": "#0a84ff"
+    },
+    {
+      "from": 1029,
+      "to": 1030,
+      "branch": null,
+      "color": "#000"
+    },
+    {
+      "from": 1030,
+      "to": 1031,
+      "branch": null,
+      "color": "#000"
+    },
+    {
+      "from": 1031,
+      "to": 1032,
+      "branch": null,
+      "color": "#000"
+    },
+    {
+      "from": 1035,
+      "to": 1029,
+      "branch": null,
+      "color": "#000"
+    },
+    {
+      "from": 1028,
+      "to": 1035,
+      "branch": null,
+      "color": "#000"
+    },
+    {
+      "from": 1032,
+      "to": 1036,
+      "branch": null,
+      "color": "#000"
+    },
+    {
+      "from": 1036,
+      "to": 1037,
+      "branch": null,
+      "color": "#000"
+    },
+    {
+      "from": 1037,
+      "to": 1033,
+      "branch": null,
+      "color": "#000"
+    },
+    {
+      "from": 1024,
+      "to": 984,
+      "branch": "false",
+      "color": "red"
+    },
+    {
+      "from": 1024,
+      "to": 1025,
+      "branch": "true",
+      "color": "green"
+    },
+    {
+      "from": 1038,
+      "to": 998,
+      "branch": null,
+      "color": "#000"
+    },
+    {
+      "from": 995,
+      "to": 1038,
+      "branch": null,
+      "color": "#000"
+    },
+    {
+      "from": 996,
+      "to": 1039,
+      "branch": null,
+      "color": "#000"
+    },
+    {
+      "from": 1039,
+      "to": 997,
+      "branch": null,
+      "color": "#000"
+    },
+    {
+      "from": 1013,
+      "to": 1040,
+      "branch": null,
+      "color": "#0a84ff"
+    },
+    {
+      "from": 1041,
+      "to": 986,
+      "branch": null,
+      "color": "#000"
+    },
+    {
+      "from": 984,
+      "to": 1041,
+      "branch": "false",
+      "color": "red"
+    },
+    {
+      "from": 1043,
+      "to": 1014,
+      "branch": "true",
+      "color": "green"
+    },
+    {
+      "from": 1043,
+      "to": 1015,
+      "branch": "false",
+      "color": "red"
+    },
+    {
+      "from": 1042,
+      "to": 1043,
+      "branch": "true",
+      "color": "green"
+    },
+    {
+      "from": 1042,
+      "to": 1044,
+      "branch": "false",
+      "color": "red"
+    },
+    {
+      "from": 993,
+      "to": 1045,
+      "branch": null,
+      "color": "#000"
+    },
+    {
+      "from": 994,
+      "to": 1045,
+      "branch": null,
+      "color": "#000"
+    },
+    {
+      "from": 1045,
+      "to": 1042,
+      "branch": null,
+      "color": "#000"
+    },
+    {
+      "from": 1028,
+      "to": 1047,
+      "branch": null,
+      "color": "#0a84ff"
+    },
+    {
+      "from": 1047,
+      "to": 1046,
+      "branch": null,
+      "color": "#0a84ff"
+    },
+    {
+      "from": 1047,
+      "to": 1052,
+      "branch": null,
+      "color": "#000"
+    },
+    {
+      "from": 1046,
+      "to": 1051,
+      "branch": null,
+      "color": "#000"
+    },
+    {
+      "from": 1052,
+      "to": 1048,
+      "branch": null,
+      "color": "#000"
+    },
+    {
+      "from": 1051,
+      "to": 1049,
+      "branch": null,
+      "color": "#000"
+    },
+    {
+      "from": 1050,
+      "to": 1053,
+      "branch": null,
+      "color": "#000"
+    },
+    {
+      "from": 1048,
+      "to": 1054,
+      "branch": null,
+      "color": "#000"
+    },
+    {
+      "from": 1054,
+      "to": 1055,
+      "branch": null,
+      "color": "#000"
+    },
+    {
+      "from": 1056,
+      "to": 1050,
+      "branch": null,
+      "color": "#000"
+    },
+    {
+      "from": 1049,
+      "to": 1057,
+      "branch": null,
+      "color": "#000"
+    },
+    {
+      "from": 1057,
+      "to": 1056,
+      "branch": null,
+      "color": "#000"
+    },
+    {
+      "from": 1057,
+      "to": 1058,
+      "branch": null,
+      "color": "#0a84ff"
+    },
+    {
+      "from": 1033,
+      "to": 1136,
+      "branch": null,
+      "color": "#000"
+    },
+    {
+      "from": 1136,
+      "to": 1034,
+      "branch": null,
+      "color": "#000"
+    }
+  ]
+}

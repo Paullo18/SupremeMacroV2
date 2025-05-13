@@ -1,0 +1,472 @@
+{
+  "macro_name": "v1 - BackUp",
+  "blocks": [
+    {
+      "id": 1032,
+      "type": "Start Thread",
+      "params": {
+        "type": "startthread",
+        "thread_name": "Fluxo Principal",
+        "forks": {
+          "1033": "Nova Thread",
+          "1094": "Continuar Fluxo"
+        }
+      },
+      "x": 29.0,
+      "y": 178.0
+    },
+    {
+      "id": 1033,
+      "type": "Start Thread",
+      "params": {
+        "type": "startthread",
+        "thread_name": "Atualiza Chart",
+        "forks": {
+          "1038": "Continuar Fluxo",
+          "1065": "Nova Thread"
+        }
+      },
+      "x": 29.0,
+      "y": 48.0
+    },
+    {
+      "id": 1038,
+      "type": "Label",
+      "params": {
+        "type": "label",
+        "name": "AtualizaChart"
+      },
+      "x": 183.0,
+      "y": 48.0
+    },
+    {
+      "id": 1039,
+      "type": "GoTo",
+      "params": {
+        "type": "goto",
+        "label": "AtualizaChart",
+        "name": "AtualizaChart"
+      },
+      "x": 657.0,
+      "y": 48.0
+    },
+    {
+      "id": 1040,
+      "type": "Delay",
+      "params": {
+        "type": "delay",
+        "time": 3600000,
+        "ms": 0,
+        "ms2": 0,
+        "name": "1 Hora"
+      },
+      "x": 500.0,
+      "y": 48.0
+    },
+    {
+      "id": 1062,
+      "type": "Screenshot",
+      "params": {
+        "type": "screenshot",
+        "mode": "region",
+        "region": {
+          "x": 53,
+          "y": 160,
+          "w": 603,
+          "h": 825
+        },
+        "save_to": "telegram",
+        "path_mode": "default",
+        "custom_path": "",
+        "token": "8175439343:AAE6HIVlnoGokSiEudlDzPIYiOv_dkS5ykQ",
+        "chat_id": "-1002633076439",
+        "bot_name": "SOL_USDT_SINAIS",
+        "custom_message_enabled": true,
+        "custom_message": "Chart Update!",
+        "name": "UpdateChart"
+      },
+      "x": 341.0,
+      "y": 48.0
+    },
+    {
+      "id": 1065,
+      "type": "Start Thread",
+      "params": {
+        "type": "startthread",
+        "thread_name": "UpdateTrade",
+        "forks": {
+          "1070": "Nova Thread",
+          "1093": "Continuar Fluxo"
+        }
+      },
+      "x": 29.0,
+      "y": -31.0
+    },
+    {
+      "id": 1070,
+      "type": "Start Thread",
+      "params": {
+        "type": "startthread",
+        "thread_name": "UpdateDias",
+        "forks": {
+          "1080": "Nova Thread",
+          "1092": "Continuar Fluxo"
+        }
+      },
+      "x": 29.0,
+      "y": -127.0
+    },
+    {
+      "id": 1079,
+      "type": "Start Thread",
+      "params": {
+        "type": "startthread",
+        "thread_name": "T. CloseTrade",
+        "forks": {
+          "1084": "Continuar Fluxo"
+        }
+      },
+      "x": 29.0,
+      "y": -285.0
+    },
+    {
+      "id": 1080,
+      "type": "Start Thread",
+      "params": {
+        "type": "startthread",
+        "thread_name": "T. UpdateTrade",
+        "forks": {
+          "1079": "Nova Thread",
+          "1085": "Continuar Fluxo"
+        }
+      },
+      "x": 29.0,
+      "y": -210.0
+    },
+    {
+      "id": 1081,
+      "type": "Telegram Command",
+      "params": {
+        "type": "telegram_command",
+        "name": "T. UpdateTrade",
+        "command": "/updatetrade"
+      },
+      "x": 327.0,
+      "y": -210.0
+    },
+    {
+      "id": 1082,
+      "type": "Telegram Command",
+      "params": {
+        "type": "telegram_command",
+        "name": "T. CloseTrade",
+        "command": "/closetrade"
+      },
+      "x": 325.0,
+      "y": -285.0
+    },
+    {
+      "id": 1083,
+      "type": "Clique",
+      "params": {
+        "type": "click",
+        "x": 1453,
+        "y": 908,
+        "mode": "Simples"
+      },
+      "x": 801.0,
+      "y": -285.0
+    },
+    {
+      "id": 1084,
+      "type": "Label",
+      "params": {
+        "type": "label",
+        "name": "T. CloseTrade"
+      },
+      "x": 175.0,
+      "y": -285.0
+    },
+    {
+      "id": 1085,
+      "type": "Label",
+      "params": {
+        "type": "label",
+        "name": "T. UpdateTrade"
+      },
+      "x": 179.0,
+      "y": -210.0
+    },
+    {
+      "id": 1086,
+      "type": "GoTo",
+      "params": {
+        "type": "goto",
+        "label": "T. CloseTrade"
+      },
+      "x": 957.0,
+      "y": -285.0
+    },
+    {
+      "id": 1087,
+      "type": "Screenshot",
+      "params": {
+        "type": "screenshot",
+        "mode": "region",
+        "region": {
+          "x": 703,
+          "y": 838,
+          "w": 953,
+          "h": 143
+        },
+        "save_to": "telegram",
+        "path_mode": "default",
+        "custom_path": "",
+        "token": "8175439343:AAE6HIVlnoGokSiEudlDzPIYiOv_dkS5ykQ",
+        "chat_id": "-1002633076439",
+        "bot_name": "SOL_USDT_SINAIS",
+        "custom_message_enabled": false,
+        "custom_message": "",
+        "name": "T. UpdateTrade"
+      },
+      "x": 478.0,
+      "y": -210.0
+    },
+    {
+      "id": 1088,
+      "type": "GoTo",
+      "params": {
+        "type": "goto",
+        "label": "T. UpdateTrade"
+      },
+      "x": 642.0,
+      "y": -210.0
+    },
+    {
+      "id": 1089,
+      "type": "Screenshot",
+      "params": {
+        "type": "screenshot",
+        "mode": "region",
+        "region": {
+          "x": 1660,
+          "y": 238,
+          "w": 250,
+          "h": 236
+        },
+        "save_to": "telegram",
+        "path_mode": "default",
+        "custom_path": "",
+        "token": "8175439343:AAE6HIVlnoGokSiEudlDzPIYiOv_dkS5ykQ",
+        "chat_id": "-1002633076439",
+        "bot_name": "SOL_USDT_SINAIS",
+        "custom_message_enabled": true,
+        "custom_message": "Trade Closed!",
+        "name": "T. EnviaPNL"
+      },
+      "x": 641.0,
+      "y": -285.0
+    },
+    {
+      "id": 1090,
+      "type": "Start Thread",
+      "params": {
+        "type": "startthread",
+        "thread_name": "T. UpdateSheet",
+        "forks": {
+          "1056": "Continuar Fluxo",
+          "1058": "Nova Thread"
+        }
+      },
+      "x": 476.0,
+      "y": -285.0
+    },
+    {
+      "id": 1091,
+      "type": "text_to_sheet",
+      "params": {
+        "type": "text_to_sheet",
+        "x": 1760,
+        "y": 240,
+        "w": 88,
+        "h": 26,
+        "scale": 1,
+        "sheet": "Controle Estrategia 1",
+        "column": "B2",
+        "tab_id": 0
+      },
+      "x": 476.0,
+      "y": -353.0
+    },
+    {
+      "id": 1092,
+      "type": "Run Macro",
+      "params": {
+        "type": "run_macro",
+        "path": "C:/Users/menic/OneDrive/Documentos/GitHub/SupremeMacroV2/macros/v1 - BackUp/update_dias_macro.json"
+      },
+      "x": 179.0,
+      "y": -127.0
+    },
+    {
+      "id": 1093,
+      "type": "Run Macro",
+      "params": {
+        "type": "run_macro",
+        "path": "C:/Users/menic/OneDrive/Documentos/GitHub/SupremeMacroV2/macros/v1 - BackUp/update_trade_macro.json"
+      },
+      "x": 181.0,
+      "y": -31.0
+    },
+    {
+      "id": 1094,
+      "type": "Run Macro",
+      "params": {
+        "type": "run_macro",
+        "path": "C:/Users/menic/OneDrive/Documentos/GitHub/SupremeMacroV2/macros/v1 - BackUp/check_open_macro.json"
+      },
+      "x": 177.0,
+      "y": 178.0
+    }
+  ],
+  "connections": [
+    {
+      "from": 1032,
+      "to": 1033,
+      "branch": null,
+      "color": "#0a84ff"
+    },
+    {
+      "from": 1040,
+      "to": 1039,
+      "branch": null,
+      "color": "#000"
+    },
+    {
+      "from": 1038,
+      "to": 1062,
+      "branch": null,
+      "color": "#000"
+    },
+    {
+      "from": 1062,
+      "to": 1040,
+      "branch": null,
+      "color": "#000"
+    },
+    {
+      "from": 1033,
+      "to": 1038,
+      "branch": null,
+      "color": "#000"
+    },
+    {
+      "from": 1033,
+      "to": 1065,
+      "branch": null,
+      "color": "#0a84ff"
+    },
+    {
+      "from": 1065,
+      "to": 1070,
+      "branch": null,
+      "color": "#0a84ff"
+    },
+    {
+      "from": 1070,
+      "to": 1080,
+      "branch": null,
+      "color": "#0a84ff"
+    },
+    {
+      "from": 1080,
+      "to": 1079,
+      "branch": null,
+      "color": "#0a84ff"
+    },
+    {
+      "from": 1080,
+      "to": 1085,
+      "branch": null,
+      "color": "#000"
+    },
+    {
+      "from": 1079,
+      "to": 1084,
+      "branch": null,
+      "color": "#000"
+    },
+    {
+      "from": 1085,
+      "to": 1081,
+      "branch": null,
+      "color": "#000"
+    },
+    {
+      "from": 1084,
+      "to": 1082,
+      "branch": null,
+      "color": "#000"
+    },
+    {
+      "from": 1083,
+      "to": 1086,
+      "branch": null,
+      "color": "#000"
+    },
+    {
+      "from": 1081,
+      "to": 1087,
+      "branch": null,
+      "color": "#000"
+    },
+    {
+      "from": 1087,
+      "to": 1088,
+      "branch": null,
+      "color": "#000"
+    },
+    {
+      "from": 1089,
+      "to": 1083,
+      "branch": null,
+      "color": "#000"
+    },
+    {
+      "from": 1082,
+      "to": 1090,
+      "branch": null,
+      "color": "#000"
+    },
+    {
+      "from": 1090,
+      "to": 1089,
+      "branch": null,
+      "color": "#000"
+    },
+    {
+      "from": 1090,
+      "to": 1091,
+      "branch": null,
+      "color": "#0a84ff"
+    },
+    {
+      "from": 1070,
+      "to": 1092,
+      "branch": null,
+      "color": "#000"
+    },
+    {
+      "from": 1065,
+      "to": 1093,
+      "branch": null,
+      "color": "#000"
+    },
+    {
+      "from": 1032,
+      "to": 1094,
+      "branch": null,
+      "color": "#000"
+    }
+  ]
+}

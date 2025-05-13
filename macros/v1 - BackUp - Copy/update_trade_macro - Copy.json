@@ -1,0 +1,170 @@
+{
+  "macro_name": "v1 - BackUp",
+  "blocks": [
+    {
+      "id": 999,
+      "type": "Label",
+      "params": {
+        "type": "label",
+        "name": "UpdateTrade"
+      },
+      "x": 88.0,
+      "y": 232.0
+    },
+    {
+      "id": 1000,
+      "type": "Delay",
+      "params": {
+        "type": "delay",
+        "time": 600000,
+        "ms": 0,
+        "ms2": 0,
+        "name": "10 Minutos"
+      },
+      "x": 520.0,
+      "y": 140.0
+    },
+    {
+      "id": 1001,
+      "type": "Screenshot",
+      "params": {
+        "type": "screenshot",
+        "mode": "region",
+        "region": {
+          "x": 704,
+          "y": 838,
+          "w": 954,
+          "h": 202
+        },
+        "save_to": "telegram",
+        "path_mode": "default",
+        "custom_path": "",
+        "token": "8175439343:AAE6HIVlnoGokSiEudlDzPIYiOv_dkS5ykQ",
+        "chat_id": "-1002633076439",
+        "bot_name": "SOL_USDT_SINAIS",
+        "custom_message_enabled": true,
+        "custom_message": "Update Trade!",
+        "name": "UpdateTrade"
+      },
+      "x": 696.0,
+      "y": 233.0
+    },
+    {
+      "id": 1002,
+      "type": "GoTo",
+      "params": {
+        "type": "goto",
+        "label": "UpdateTrade",
+        "name": "UpdateTrade"
+      },
+      "x": 852.0,
+      "y": 233.0
+    },
+    {
+      "id": 1019,
+      "type": "OCR",
+      "params": {
+        "type": "ocr",
+        "x": 713,
+        "y": 888,
+        "w": 120,
+        "h": 24,
+        "text": "Perpetual",
+        "verificar_vazio": false,
+        "name": "ChecaAberto"
+      },
+      "x": 520.0,
+      "y": 233.0
+    },
+    {
+      "id": 1020,
+      "type": "GoTo",
+      "params": {
+        "type": "goto",
+        "label": "UpdateTrade",
+        "name": "UpdateTrade"
+      },
+      "x": 520.0,
+      "y": 337.0
+    },
+    {
+      "id": 1022,
+      "type": "OCR",
+      "params": {
+        "type": "ocr",
+        "x": 709,
+        "y": 886,
+        "w": 125,
+        "h": 28,
+        "text": "Perpetual",
+        "verificar_vazio": false,
+        "name": "ChecaAberto"
+      },
+      "x": 371.0,
+      "y": 232.0
+    },
+    {
+      "id": 1023,
+      "type": "Delay",
+      "params": {
+        "type": "delay",
+        "time": 10000,
+        "ms": 0,
+        "ms2": 0,
+        "name": "10 Segundos"
+      },
+      "x": 228.0,
+      "y": 232.0
+    }
+  ],
+  "connections": [
+    {
+      "from": 1001,
+      "to": 1002,
+      "branch": null,
+      "color": "#000"
+    },
+    {
+      "from": 1019,
+      "to": 1020,
+      "branch": "false",
+      "color": "red"
+    },
+    {
+      "from": 1019,
+      "to": 1001,
+      "branch": "true",
+      "color": "green"
+    },
+    {
+      "from": 1000,
+      "to": 1019,
+      "branch": null,
+      "color": "#000"
+    },
+    {
+      "from": 1022,
+      "to": 1000,
+      "branch": "true",
+      "color": "green"
+    },
+    {
+      "from": 1022,
+      "to": 1020,
+      "branch": "false",
+      "color": "red"
+    },
+    {
+      "from": 999,
+      "to": 1023,
+      "branch": null,
+      "color": "#000"
+    },
+    {
+      "from": 1023,
+      "to": 1022,
+      "branch": null,
+      "color": "#000"
+    }
+  ]
+}

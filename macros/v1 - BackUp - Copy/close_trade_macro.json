@@ -1,0 +1,148 @@
+{
+  "macro_name": "v1 - BackUp - Copy",
+  "blocks": [
+    {
+      "id": 1004,
+      "type": "Clique",
+      "params": {
+        "type": "click",
+        "x": 1453,
+        "y": 908,
+        "name": "ClickToCloseTrade",
+        "mode": "Simples"
+      },
+      "x": 223.0,
+      "y": -273.0
+    },
+    {
+      "id": 1005,
+      "type": "Screenshot",
+      "params": {
+        "type": "screenshot",
+        "mode": "region",
+        "region": {
+          "x": 1660,
+          "y": 235,
+          "w": 249,
+          "h": 243
+        },
+        "save_to": "telegram",
+        "path_mode": "default",
+        "custom_path": "",
+        "token": "8175439343:AAE6HIVlnoGokSiEudlDzPIYiOv_dkS5ykQ",
+        "chat_id": "-1002633076439",
+        "bot_name": "SOL_USDT_SINAIS",
+        "custom_message_enabled": true,
+        "custom_message": "Trade Closed!",
+        "name": "SendPNL"
+      },
+      "x": 63.0,
+      "y": -184.0
+    },
+    {
+      "id": 1006,
+      "type": "Delay",
+      "params": {
+        "type": "delay",
+        "time": 1000,
+        "ms": 0,
+        "ms2": 0
+      },
+      "x": 383.0,
+      "y": -273.0
+    },
+    {
+      "id": 1007,
+      "type": "Clique",
+      "params": {
+        "type": "click",
+        "x": 1453,
+        "y": 911,
+        "name": "EnsureTradeClosure",
+        "mode": "Simples"
+      },
+      "x": 535.0,
+      "y": -273.0
+    },
+    {
+      "id": 1013,
+      "type": "Start Thread",
+      "params": {
+        "type": "startthread",
+        "thread_name": "Close Trade",
+        "forks": {
+          "1004": "Continuar Fluxo",
+          "1005": "Nova Thread",
+          "1040": "Nova Thread"
+        }
+      },
+      "x": 63.0,
+      "y": -273.0
+    },
+    {
+      "id": 1040,
+      "type": "text_to_sheet",
+      "params": {
+        "type": "text_to_sheet",
+        "x": 1758,
+        "y": 236,
+        "w": 90,
+        "h": 32,
+        "scale": 1,
+        "sheet": "Controle Estrategia 1",
+        "column": "B1",
+        "tab_id": 0
+      },
+      "x": 63.0,
+      "y": -376.0
+    },
+    {
+      "id": 1049,
+      "type": "Run Macro",
+      "params": {
+        "type": "run_macro",
+        "path": "C:/Users/menic/OneDrive/Documentos/GitHub/SupremeMacroV2/macros/v1 - BackUp - Copy/check_open_macro.json"
+      },
+      "x": 694.0,
+      "y": -273.0
+    }
+  ],
+  "connections": [
+    {
+      "from": 1004,
+      "to": 1006,
+      "branch": null,
+      "color": "#000"
+    },
+    {
+      "from": 1006,
+      "to": 1007,
+      "branch": null,
+      "color": "#000"
+    },
+    {
+      "from": 1013,
+      "to": 1004,
+      "branch": null,
+      "color": "#000"
+    },
+    {
+      "from": 1013,
+      "to": 1005,
+      "branch": null,
+      "color": "#0a84ff"
+    },
+    {
+      "from": 1013,
+      "to": 1040,
+      "branch": null,
+      "color": "#0a84ff"
+    },
+    {
+      "from": 1007,
+      "to": 1049,
+      "branch": null,
+      "color": "#000"
+    }
+  ]
+}
