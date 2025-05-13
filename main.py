@@ -74,7 +74,13 @@ def _formatar_rotulo(params: dict) -> str:
 class FlowchartApp:
     def __init__(self, root):
         self.root = root
-        self.root.title("TraderAutoSuite v0.9.3")
+        self.root.title("TraderAutoSuite v0.9.4")
+
+        # flag para alterações não salvas
+        self._dirty = False
+        # intercepta o “X” da janela
+        self.root.protocol("WM_DELETE_WINDOW", self._on_closing)
+
         # ---------------- layout da janela -----------------
         largura_janela, altura_janela = 1400, 890
         largura_tela  = root.winfo_screenwidth()
@@ -198,7 +204,31 @@ class FlowchartApp:
     # Métodos de callback (adicione as implementações que desejar)
     def novo_arquivo(self):         messagebox.showinfo("Novo", "Novo arquivo…")
     def abrir_arquivo(self):        messagebox.showinfo("Abrir", "Abrir arquivo…")
-    def salvar_arquivo(self):       messagebox.showinfo("Salvar","Salvar arquivo…")
+    def salvar_arquivo(self):       
+        # Caso 1: macro já existe → atualiza JSON e imagens em place
+        if storage.caminho_macro_real and os.path.isfile(storage.caminho_macro_real):
+            original = storage.caminho_macro_real
+            # exporta estado atual para tmp
+            tmp_path = export_macro_to_tmp(
+                self.blocos.blocks,
+                self._build_arrows_data(),
+                macro_name=os.path.basename(os.path.dirname(original))
+            )
+            # sincroniza imagens para a pasta da macro
+            storage._sincronizar_imagens(tmp_path, os.path.dirname(original))
+            # sobrescreve o JSON definitivo
+            shutil.copy(tmp_path, original)
+            # limpa temporários e atualiza ponteiros
+            storage.limpar_tmp()
+            storage.caminho_macro_real  = original
+            storage.caminho_arquivo_tmp = tmp_path
+            messagebox.showinfo("Salvo", f"Macro atualizada em:\n{original}")
+        else:
+            # Caso 2: primeira vez → gera tmp e abre diálogo de nome
+            export_macro_to_tmp(self.blocos.blocks, self._build_arrows_data())
+            salvar_macro_gui()
+        # marca que não há mais alterações pendentes
+        self._dirty = False
     def desfazer(self):             pass
     def refazer(self):              pass
     def copiar(self):               pass
@@ -439,35 +469,8 @@ class FlowchartApp:
         # BOTÃO SALVAR
         # ------------------------------------------------------------------
         if nome == "Salvar":
-            # === CASO 1 – macro já existe (…/Macros/<nome>/macro.json) =====
-            if storage.caminho_macro_real and os.path.isfile(storage.caminho_macro_real):
-                original_json = storage.caminho_macro_real
-
-                # exporta estado atual → tmp  (altera caminho_arquivo_tmp)
-                tmp_json = export_macro_to_tmp(
-                    self.blocos.blocks,
-                    self._build_arrows_data(),
-                    macro_name=os.path.basename(os.path.dirname(original_json)),
-                )
-
-                # move qualquer PNG novo para  <macro>/img  e conserta caminhos
-                storage._sincronizar_imagens(tmp_json, os.path.dirname(original_json))
-
-                # copia tmp sobre o arquivo definitivo
-                shutil.copy(tmp_json, original_json)
-
-                # limpa tmp e restaura ponteiros
-                storage.limpar_tmp()
-                storage.caminho_arquivo_tmp = tmp_json     # último snapshot
-                storage.caminho_macro_real  = original_json
-
-                messagebox.showinfo("Salvo", f"Macro atualizada em:\n{original_json}")
-                return
-
-            # === CASO 2 – primeiro salvamento =============================
-            # exporta para tmp e chama o fluxo de criação/persistência
-            export_macro_to_tmp(self.blocos.blocks, self._build_arrows_data())
-            storage.salvar_macro_gui()               # aqui caminho_macro_real é definido
+            # delega para o método unificado de salvamento
+            self.salvar_arquivo()
             return
 
         # ------------------------------------------------------------------
@@ -700,6 +703,28 @@ class FlowchartApp:
     def _update_status(self):
         pct = int(round(self._zoom_scale * 100))
         self.status.config(text=f"{pct} %")
+
+    def _mark_dirty(self):
+        """Marca que houve edição desde o último save."""
+        self._dirty = True
+
+    def _on_closing(self):
+        """Pergunta antes de fechar se houver alterações não salvas."""
+        if not self._dirty:
+            self.root.destroy()
+            return
+
+        resp = messagebox.askyesnocancel(
+            "Salvar alterações",
+            "Há alterações não salvas. Deseja salvar antes de sair?"
+        )
+        if resp is None:
+            # Cancelou
+            return
+        if resp:
+           # chama o save unificado (já faz export_tmp + “Salvar como” se preciso)
+           self.salvar_arquivo()
+        self.root.destroy()
 
 # ============================================================
 # Inicialização

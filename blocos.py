@@ -144,6 +144,8 @@ class BlocoManager:
         if not self._is_restoring:
             self._undo_stack.append(self._snapshot())
             self._redo_stack.clear()
+            # toda edição de bloco marca o app como “sujo”
+            self.app._mark_dirty()
 
         # --------------------------------------------------
         # 2) coordenadas (já aplicando zoom)
@@ -1002,6 +1004,8 @@ class BlocoManager:
            if not self._is_restoring:
                self._undo_stack.append(self._snapshot())
                self._redo_stack.clear()
+               # toda edição de bloco marca o app como “sujo”
+               self.app._mark_dirty()
        # 3) chama sua janela existente
        add_click(
            actions     = bloco["_click_buffer"],
@@ -1017,6 +1021,8 @@ class BlocoManager:
             if not self._is_restoring:
                 self._undo_stack.append(self._snapshot())
                 self._redo_stack.clear()
+                # toda edição de bloco marca o app como “sujo”
+                self.app._mark_dirty()
     
             # 2) seleciona AC: ou do buffer (novo) ou do próprio bloco (edição)
             if bloco["_delay_buffer"]:
@@ -1054,6 +1060,8 @@ class BlocoManager:
             if not self._is_restoring:
                 self._undo_stack.append(self._snapshot())
                 self._redo_stack.clear()
+                # toda edição de bloco marca o app como “sujo”
+                self.app._mark_dirty()
 
             # 2) grava a ação e desenha o label
             ac = bloco["_goto_buffer"][-1]
@@ -1099,6 +1107,8 @@ class BlocoManager:
             if not self._is_restoring:
                 self._undo_stack.append(self._snapshot())
                 self._redo_stack.clear()
+                # toda edição de bloco marca o app como “sujo”
+                self.app._mark_dirty()
 
             # 2) grava a última ação confirmada
             ac = bloco["_img_buffer"][-1]
@@ -1140,6 +1150,8 @@ class BlocoManager:
             if not self._is_restoring:
                 self._undo_stack.append(self._snapshot())
                 self._redo_stack.clear()
+                # toda edição de bloco marca o app como “sujo”
+                self.app._mark_dirty()
 
             # pega a ação e desenha
             ac = bloco["_label_buffer"][-1]
@@ -1176,6 +1188,8 @@ class BlocoManager:
             if not self._is_restoring:
                 self._undo_stack.append(self._snapshot())
                 self._redo_stack.clear()
+                # toda edição de bloco marca o app como “sujo”
+                self.app._mark_dirty()
 
             ac = bloco["_loop_buffer"][-1]
             bloco["acao"] = ac
@@ -1221,6 +1235,8 @@ class BlocoManager:
             if not self._is_restoring:
                 self._undo_stack.append(self._snapshot())
                 self._redo_stack.clear()
+                # toda edição de bloco marca o app como “sujo”
+                self.app._mark_dirty()
 
             # 2) grava definitivamente a ação
             ac = bloco["_ocr_buffer"][-1]
@@ -1276,6 +1292,8 @@ class BlocoManager:
             if not self._is_restoring:
                 self._undo_stack.append(self._snapshot())
                 self._redo_stack.clear()
+                # toda edição de bloco marca o app como “sujo”
+                self.app._mark_dirty()
 
             # 2) grava a ação definitiva
             ac = bloco["_od_buffer"][-1]
@@ -1319,6 +1337,8 @@ class BlocoManager:
             if not self._is_restoring:
                 self._undo_stack.append(self._snapshot())
                 self._redo_stack.clear()
+                # toda edição de bloco marca o app como “sujo”
+                self.app._mark_dirty()
             ac = bloco["_txt_buffer"][-1]      # {'type':'text', 'content': '...'}
             bloco["acao"] = ac
             # remove label antigo (se existir)
@@ -1359,6 +1379,8 @@ class BlocoManager:
             if not self._is_restoring:
                 self._undo_stack.append(self._snapshot())
                 self._redo_stack.clear()
+                # toda edição de bloco marca o app como “sujo”
+                self.app._mark_dirty()
 
             # pega a última ação confirmada
             ac = bloco["_screenshot_buffer"][-1]
@@ -1480,6 +1502,8 @@ class BlocoManager:
             if not self._is_restoring:
                 self._undo_stack.append(self._snapshot())
                 self._redo_stack.clear()
+                # toda edição de bloco marca o app como “sujo”
+                self.app._mark_dirty()
 
             # pega última ação (que contém type, x,y,w,h,scale)
             ac = bloco["_tts_buffer"][-1]
@@ -1530,6 +1554,8 @@ class BlocoManager:
             if not self._is_restoring:
                 self._undo_stack.append(self._snapshot())
                 self._redo_stack.clear()
+                # toda edição de bloco marca o app como “sujo”
+                self.app._mark_dirty()
 
         # 3) invoca a janela de configuração
         add_telegram_command(
@@ -1547,6 +1573,8 @@ class BlocoManager:
             if not self._is_restoring:
                 self._undo_stack.append(self._snapshot())
                 self._redo_stack.clear()
+                # toda edição de bloco marca o app como “sujo”
+                self.app._mark_dirty()
 
             # 2) aplica ao bloco
             ac = bloco["_run_macro_buffer"][-1]
