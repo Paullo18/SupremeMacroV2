@@ -1,4 +1,3 @@
-# ===== arquivo: gui/macro_status.py =====
 import tkinter as tk
 from tkinter import ttk
 import threading
@@ -7,7 +6,7 @@ import core.executar as exec_mod
 
 class MacroStatusWindow:
     """
-    Exibe o progresso de todas as threads de uma macro.
+    Exibe o progresso de todas as threads de uma macro em duas colunas.
 
     Parâmetros
     ----------
@@ -16,59 +15,64 @@ class MacroStatusWindow:
         Callback disparado quando a janela é destruída.
     thread_names : list[str] | None
         Lista de nomes de thread conhecidos *antes* da execução.
-        (Ex.: ['Thread Principal', 'ChecaSinal', 'AtualizaChart' ...])
     """
     def __init__(self, master, on_close, thread_names=None):
         self.on_close = on_close
         self.win = tk.Toplevel(master)
         self.win.title("Status da Macro")
-        self.win.geometry("420x300")
+        self.win.geometry("620x400")
         self.win.attributes("-topmost", True)
-        # --- contêiner principal
+
+        # --- contêiner principal em grid para duas colunas
         self.container = tk.Frame(self.win)
         self.container.pack(fill="both", expand=True, padx=10, pady=10)
+        self.container.columnconfigure(0, weight=1)
+        self.container.columnconfigure(1, weight=1)
 
-        # mapas auxiliares
+        # armazenamento interno
         self._threads: dict[str, tuple[tk.Widget, ttk.Progressbar, tk.Label]] = {}
         self._stop_events: dict[str, threading.Event | None] = {}
+        self._toggle_buttons: dict[str, tk.Button] = {}
+        self._restart_callbacks: dict[str, callable] = {}
         self._threads_ever_created = False
 
-        # cria widgets para nomes já conhecidos
+        # pré-criar threads conhecidas
         if thread_names:
             for nm in thread_names:
                 self._make_thread_widgets(nm)
 
-        # botões de controle geral
+        # botões gerais
         bf = tk.Frame(self.win)
         bf.pack(fill="x", padx=10, pady=(0, 10))
         self.pause_btn = tk.Button(
             bf, text="Pausar Todas", width=12, command=self.toggle_pause_all
         )
         self.pause_btn.pack(side="left", padx=5)
-        tk.Button(bf, text="Stop Todas", width=12, command=self.stop_all
-                  ).pack(side="right", padx=5)
+        tk.Button(bf, text="Stop Todas", width=12, command=self.stop_all).pack(side="right", padx=5)
 
-        # timers
+        # ciclos de manutenção
         self.win.after(500, self._auto_close_check)
         self.win.after(500, self._cleanup_threads)
 
-    # ---------- movimentação da janela ----------
-    def _start_move(self, e):
-        self._drag_x, self._drag_y = e.x, e.y
+    def preload_threads(self, names: list[str]):
+        """
+        Cria (se ainda não existirem) os quadros para cada thread em 'names'.
+        """
+        for name in names:
+            self._make_thread_widgets(name)
 
-    def _on_move(self, e):
-        dx, dy = e.x - self._drag_x, e.y - self._drag_y
-        self.win.geometry(f"+{self.win.winfo_x() + dx}+{self.win.winfo_y() + dy}")
-
-    # ---------- criação de widgets por thread ----------
+    # ---------- criação de widgets em duas colunas ----------
     def _make_thread_widgets(self, name: str):
-        if not self.win.winfo_exists():
+        if not self.win.winfo_exists() or name in self._threads:
             return
-        if name in self._threads:        # já existe, não recria
-            return
+
+        index = len(self._threads)
+        row = index // 2
+        col = index % 2
 
         frame = tk.LabelFrame(self.container, text=name, padx=5, pady=5)
-        frame.pack(fill="x", padx=5, pady=(0, 8))
+        frame.grid(row=row, column=col, sticky="nsew", padx=5, pady=(0, 8))
+        self.container.rowconfigure(row, weight=0)
 
         pb = ttk.Progressbar(frame, orient="horizontal", mode="determinate")
         pb.pack(fill="x", expand=True)
@@ -79,24 +83,49 @@ class MacroStatusWindow:
         )
         lbl.pack(fill="x")
 
-        tk.Button(
-            frame, text="Stop", command=lambda: self._stop_thread(name)
-        ).pack(anchor="e", pady=(5, 0))
+        # botão toggle Stop/Play
+        btn = tk.Button(
+            frame, text="Stop", width=6,
+            command=lambda n=name: self._on_toggle_thread(n)
+        )
+        btn.pack(anchor="e", pady=(5, 0))
 
+        # armazenar referências
         self._threads[name] = (frame, pb, lbl)
+        self._toggle_buttons[name] = btn
         self._stop_events.setdefault(name, None)
-        self._threads_ever_created = True  # já tem algo na tela
+        self._threads_ever_created = True
 
-        # ---------- API extra: pré-criar threads ----------
-    def preload_threads(self, names: list[str]):
+    # ---------- para registrar restart callbacks ----------
+    def register_restart_callback(self, name: str, callback: callable):
         """
-        Cria (se ainda não existirem) os quadros de todas as threads indicadas.
-        Pode ser chamado antes mesmo de a execução começar.
+        Registra uma função que será chamada quando o usuário clicar em Play.
+        assinatura callback(name: str, new_stop_event: threading.Event)
         """
-        for n in names:
-            self._make_thread_widgets(n)
+        self._restart_callbacks[name] = callback
 
-    # ---------- API pública usada pela execução ----------
+    # ---------- tratamento de Stop/Play por thread ----------
+    def _on_toggle_thread(self, name: str):
+        btn = self._toggle_buttons.get(name)
+        evt = self._stop_events.get(name)
+        if not btn:
+            return
+
+        if btn["text"] == "Stop":
+            # parar thread
+            if evt:
+                evt.set()
+            btn.config(text="Play")
+        else:
+            # restart thread
+            new_evt = threading.Event()
+            self._stop_events[name] = new_evt
+            cb = self._restart_callbacks.get(name)
+            if cb:
+                cb(name, new_evt)
+            btn.config(text="Stop")
+
+    # ---------- API para execução ----------
     def register_stop_event(self, name: str, event: threading.Event):
         self._stop_events[name] = event
 
@@ -105,7 +134,6 @@ class MacroStatusWindow:
             return
         if name not in self._threads:
             self._make_thread_widgets(name)
-
         _, pb, _ = self._threads[name]
         try:
             pb["maximum"] = total
@@ -120,17 +148,11 @@ class MacroStatusWindow:
             return
         if name not in self._threads:
             self._make_thread_widgets(name)
-
         _, _, lbl = self._threads[name]
         lbl.config(text=f"Último bloco: {text}")
         self.win.update_idletasks()
 
-    # ---------- ações dos botões ----------
-    def _stop_thread(self, name: str):
-        evt = self._stop_events.get(name)
-        if evt:
-            evt.set()
-
+    # ---------- ações dos botões gerais ----------
     def toggle_pause_all(self):
         exec_mod.macro_pausar = not exec_mod.macro_pausar
         self.pause_btn.config(
@@ -149,23 +171,20 @@ class MacroStatusWindow:
                 self.on_close()
 
     # ---------- manutenção / encerramento ----------
+    # ---------- manutenção / encerramento ----------
     def _cleanup_threads(self):
-        """
-        Mantém o loop vivo para eventual uso futuro,
-        mas **não** remove mais widgets de threads encerradas.
-        """
+        """Mantém a lista interna livre de widgets órfãos se a thread for encerrada."""
         if self.win.winfo_exists():
+            # reagenda a si mesmo a cada 500 ms
             self.win.after(500, self._cleanup_threads)
 
     def _auto_close_check(self):
-        # fecha só se já mostrou algo E não existirem mais threads vivas
-        if self._threads_ever_created and not any(
-            t.name.startswith("Thread") for t in threading.enumerate()
-        ):
+        # Enquanto houver ao menos um stop_event não setado → janela fica.
+        if any(evt and not evt.is_set() for evt in self._stop_events.values()):
+            self.win.after(500, self._auto_close_check)
+        else:
             try:
                 self.win.destroy()
             finally:
                 if self.on_close:
                     self.on_close()
-            return
-        self.win.after(500, self._auto_close_check)

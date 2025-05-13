@@ -302,12 +302,12 @@ class FlowchartApp:
 
         # Cria os quadros ANTES da execução (sem “Thread Principal”)
         status_win.preload_threads(sorted(friendly_names))
-
+        stop_evt = threading.Event()
         # ------------------------------------------------------------------
         # 2)  Oculta janela principal e prepara execução
         # ------------------------------------------------------------------
         self.root.withdraw()           # minimiza janela principal
-        stop_evt = threading.Event()
+
 
         # callbacks ----------------------------------------------------------------
         def progress_cb(name, step, total):
@@ -350,19 +350,20 @@ class FlowchartApp:
 
 
         # ------------------------------------------------------------------
-        # 3) Executa a macro
-        # ------------------------------------------------------------------
+        # 3) Registrando callback de restart (AGORA que progress_cb e label_cb existem)
         executar_macro_flow(
             json_path,
             progress_callback=progress_cb,
             label_callback=label_cb,
-            stop_event=stop_evt
+            stop_event=stop_evt,
+            status_win=status_win
         )
 
         # ------------------------------------------------------------------
         # 4) Limpeza final
         # ------------------------------------------------------------------
-        status_win.win.after(0, status_win.win.destroy)
+        # A janela de status se auto‑fecha quando TODAS as threads sinalizam stop.
+        # Portanto, não a destruímos aqui; apenas restauramos a janela principal.
         self.root.after(0, self.root.deiconify)
         storage.macro_running = False
 
