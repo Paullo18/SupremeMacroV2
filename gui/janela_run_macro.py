@@ -1,6 +1,7 @@
 import os
 import tkinter as tk
 from tkinter import Toplevel, Label, Entry, Button, filedialog, messagebox
+from core import storage
 
 
 def add_run_macro(actions, update_list, tela, initial=None):
@@ -36,6 +37,9 @@ def add_run_macro(actions, update_list, tela, initial=None):
             path_var.set(path)
 
     def on_open():
+        # salva o caminho da macro principal para restaurar depois
+        parent_path = storage.caminho_macro_real
+
         path = path_var.get().strip()
         if not path or not os.path.isfile(path):
             messagebox.showerror("Erro", "Arquivo inválido ou não selecionado.")
@@ -43,21 +47,30 @@ def add_run_macro(actions, update_list, tela, initial=None):
         # libera grab e oculta janela de configuração
         win.grab_release()
         win.withdraw()
+
         # Abre uma nova janela do editor para esta macro
         from main import FlowchartApp
         new_root = Toplevel(tela)
         new_root.transient(tela)
         new_root.lift()
         new_root.focus_force()
-        # Inicia o editor na nova janela
+        new_root.grab_set()
+
+        # Inicia o editor na nova janela com a macro selecionada
         app = FlowchartApp(new_root)
         app._acao_carregar(path)
 
-        # Função para restaurar a janela de configuração quando fechar o editor
+        # ao fechar o editor aninhado, restaura o storage e devolve grab
         def on_child_close():
+            # libera grab da janela aninhada
+            new_root.grab_release()
             new_root.destroy()
+            # restaura macro principal em storage
+            storage.caminho_macro_real = parent_path
+            # devolve modal ao diálogo original
             win.deiconify()
             win.grab_set()
+
         new_root.protocol("WM_DELETE_WINDOW", on_child_close)
 
     def on_ok():
