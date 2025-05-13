@@ -74,7 +74,7 @@ def _formatar_rotulo(params: dict) -> str:
 class FlowchartApp:
     def __init__(self, root):
         self.root = root
-        self.root.title("TraderAutoSuite v0.9.4")
+        self.root.title("TraderAutoSuite v0.9.5")
 
         # flag para alterações não salvas
         self._dirty = False
@@ -343,7 +343,8 @@ class FlowchartApp:
                     else:
                         desc = tipo.capitalize()
                 else:
-                    desc = f"Bloco {block_id} (não encontrado)"
+                    parts = raw_text.split()
+                    desc = " ".join(parts[:-1]) if len(parts) > 1 else raw_text
 
             status_win.update_block(display, desc)
 

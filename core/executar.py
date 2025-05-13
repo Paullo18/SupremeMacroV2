@@ -242,7 +242,23 @@ def _run_branch(blocks, next_map, json_path, start_block,
         if progress_callback:
             progress_callback(disp_name, step, total)
         if label_callback:
-            label_callback(disp_name, f"Executando bloco {current}")
+            # 1) qual o tipo do bloco?
+            tipo = ac.get("type", "").lower()
+
+            # 2) pega primeiro o nome customizado/name, se houver
+            label_text = ac.get("custom_name") or ac.get("name")
+
+            # 3) se não tiver, monta um fallback de delay ou simplesmente capitaliza o tipo
+            if not label_text:
+                if tipo == "delay":
+                    ms = ac.get("time", 0)
+                    label_text = f"Delay: {ms}ms"
+                else:
+                    # você pode tratar outros casos especiais aqui, ex: run_macro, click, etc.
+                    label_text = tipo.capitalize()
+
+            # 4) dispara usando o mesmo formato "LABEL ID"
+            label_callback(disp_name, f"{label_text} {current}")
 
         #bloco = blocks[current]
         #ac = bloco.get("params", {})   # params gravado no JSON
@@ -622,17 +638,23 @@ def _run_branch(blocks, next_map, json_path, start_block,
             elif tipo == "run_macro":
                 nested = ac.get("path", "").strip()
                 if nested and os.path.isfile(nested):
-                    print(f"[DEBUG][{disp_name}] Executando macro aninhada: {nested}")
-                    # executa a macro selecionada, repassando callbacks e stop_event
-                    executar_macro_flow(
+                    print(f"[DEBUG][{disp_name}] Executando macro aninhada inline: {nested}")
+                    # 1) carrega o fluxo da macro filha
+                    blocks2, next_map2, start2 = load_macro_flow(nested)
+                    # 2) executa INLINE, reaproveitando o mesmo nome de thread (disp_name)
+                    _run_branch(
+                        blocks2,
+                        next_map2,
                         nested,
+                        start2,
                         progress_callback,
                         label_callback,
-                        stop_event
+                        stop_event,
+                        disp_name
                     )
                 else:
                     print(f"[WARN][{disp_name}] Caminho de macro inválido: {nested}")
-                # depois da execução, segue o fluxo padrão
+                # após a filha, continua o fluxo do macro atual
                 default_outs = next_map[current].get("default", [])
                 current = default_outs[0] if default_outs else None
                 continue
