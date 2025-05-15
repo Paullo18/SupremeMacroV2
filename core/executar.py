@@ -219,11 +219,19 @@ def _run_branch(blocks, next_map, json_path, start_block,
                 current = main_dest
 
                 # ✅ Depois cria as threads paralelas
+                parent_label = disp_name               # ← nome do bloco pai
+
                 for dest in novas_threads:
                     params_destino = blocks.get(dest, {}).get("params", {})
-                    base_name = params_destino.get("thread_name", f"Thread-{dest}")
-                    display_name = base_name
-                    internal_name = f"{base_name}-{dest}"
+
+                    # Se não houver thread_name, herda do pai
+                    base_name = (
+                        params_destino.get("thread_name")
+                        or f"{parent_label} – ramo"
+                    )
+
+                    display_name = base_name            # rótulo na UI
+                    internal_name = f"{base_name}-{dest}"  # nome interno único
 
                     #print(f"[DEBUG] Iniciando thread '{display_name}' para bloco {dest}")
                     child_evt = threading.Event()
