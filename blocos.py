@@ -1,11 +1,9 @@
 from PIL import Image, ImageTk
 import os
 import tkinter as tk
-from tkinter import ttk, filedialog, messagebox
 from gui.janela_clique import add_click
 from gui.janela_delay import add_delay
 from gui.janela_goto import add_goto
-from gui.janela_imagem import add_imagem
 from gui.janela_label import add_label
 from gui.janela_loop import add_loop
 from gui.janela_ocr import add_ocr
@@ -16,10 +14,9 @@ from gui.fork_janela import abrir_fork_dialog
 from gui.ocr_to_sheet import add_ocr_to_sheet
 from gui.telegram_command import add_telegram_command
 from gui.janela_run_macro import add_run_macro
-from core.update_list import update_list
-import threading, time, pyautogui, keyboard
-from tkinter import Toplevel, IntVar, Label, Entry, simpledialog
-import pytesseract
+from gui.janela_variavel import add_variavel
+from gui.janela_se_variavel import add_se_variavel
+from tkinter import simpledialog
 
 # ───────── helper genérico de rótulo ────────────────────────────
 def _formatar_rotulo(acao: dict) -> str:
@@ -62,6 +59,19 @@ def _formatar_rotulo(acao: dict) -> str:
             return "Screenshot: tela inteira"
         reg = acao.get("region", {})
         return f"Screenshot: reg ({reg.get('x')},{reg.get('y')},{reg.get('w')}×{reg.get('h')})"
+    elif tipo == "run_macro":
+        # mostra só o nome do arquivo (.json) sem o caminho completo
+        from os.path import basename
+        return basename(acao.get("path", "")) or "Run Macro"
+    elif tipo == "variavel":
+        nome = acao.get("var_name", "")
+        valor = acao.get("var_value", "")
+        return f"{nome} = {valor}"
+    elif tipo == "se variavel":
+        nome = acao.get("var_name", "")
+        op   = acao.get("operator", "")
+        cv   = acao.get("compare_value", "")
+        return f"{nome} {op} {cv}"
     else:
         return tipo.upper() or "Bloco"
     
@@ -70,51 +80,98 @@ class BlocoManager:
     def __init__(self, canvas, app):
         self.canvas = canvas
         self.app = app
-        # capta duplo‐clique geral no canvas
+
+        # margem em px para disparar hover expandido (5px em cada direção)
+        self._handler_margin = 10
+        # bloco que atualmente está “hovered” (com handlers visíveis)
+        self._hovered_block = None
+        # bind global para detectar movimento do mouse
+        self.canvas.bind("<Motion>", self._on_mouse_move)
+        # bind global de duplo‑clique
         self.canvas.bind("<Double-Button-1>", self._on_canvas_double_click, add="+")
 
-        self.blocks = []
-        self.ocupados = set()
-        self.block_width = 112
-        self.block_height = 40
-        self.margem_topo = 20
+        # === INICIALIZAÇÃO CORRETA DOS ATRIBUTOS ===
+        # lista de blocos e posições ocupadas
+        self.blocks        = []
+        self.ocupados      = set()
+        # dimensões e espaçamentos
+        self.block_width   = 112
+        self.block_height  = 40
+        self.margem_topo   = 20
         self.espaco_vertical = 20
-
-        # estado de arrasto
-        self.arrastando = None
-        self.offset_x = 0
-        self.offset_y = 0
-
-        # --- seleção por arrasto ---
+        # timers para esconder handlers
+        self._hide_timers  = {}
+        # estado de arrasto e offsets
+        self.arrastando    = None
+        self.offset_x      = 0
+        self.offset_y      = 0
+        # seleção por arrasto
         self.selecao_iniciada = False
-        self.sel_start_x = 0
-        self.sel_start_y = 0
-        self.sel_rect_id = None
-
+        self.sel_start_x      = 0
+        self.sel_start_y      = 0
+        self.sel_rect_id      = None
         # destaque de seleção única
         self.borda_selecionada = None
-
-        # para futura seleção múltipla (mesmo que ainda não seja usada)
+        # seleção múltipla futura
         self.blocos_selecionados = []
+        # cache de imagens para evitar coleta
+        self.imagens       = {}
+        # pilhas de undo/redo
+        self._undo_stack   = []
+        self._redo_stack   = []
+        # grupo arrastado
+        self._drag_group   = None
+        # flags de restauração e movimento
+        self._is_restoring = False
+        self._has_moved    = False
 
-        # cache de imagens para evitar GC
-        self.imagens = {}
+    def _on_mouse_move(self, event):
+        """
+        Mostra os ⊕ apenas no bloco realmente sob o mouse (com margem),
+        e oculta os handlers do bloco anterior.
+        """
+        # se estivermos criando/arrastando conexão ou blocos, não atrapalhar
+        if getattr(self.app.setas, "handle_drag", False) or self.arrastando:
+            return
 
-        # ▼ pilhas de desfazer/refazer
-        self._undo_stack = []
-        self._redo_stack = []
-        # ▼ usado para arrastar grupo
-        self._drag_group = None   # lista de blocos movidos juntos
+        # calcula posição “inflada” do mouse na coord canvas
+        x = self.canvas.canvasx(event.x)
+        y = self.canvas.canvasy(event.y)
+        m = self._handler_margin
 
-        self._is_restoring = False   # evita snapshots enquanto restaura
+        # busca o bloco cujo group_tag esteja sob o cursor (com margem)
+        items = self.canvas.find_overlapping(x-m, y-m, x+m, y+m)
+        alvo = None
+        # procura do item mais alto (reversed) para baixo
+        for item in reversed(items):
+            for tag in self.canvas.gettags(item):
+                if tag.startswith("bloco"):
+                    # encontrou o bloco
+                    alvo = next((b for b in self.blocks if b["group_tag"] == tag), None)
+                    if alvo:
+                        break
+            if alvo:
+                break
 
-        self._has_moved = False
+        # se mudou o bloco “hovered”, oculta o antigo e mostra o novo
+        if alvo is not self._hovered_block:
+            if self._hovered_block:
+                self._hide_handles(self._hovered_block)
+            if alvo:
+                self._show_handles(alvo)
+            self._hovered_block = alvo
 
     def finalizar_arrasto(self, event):
 
          # rotina já existente
         if self.arrastando:
+            # arraste acabou → marcamos como “sujo” e atualizamos o asterisco
             self.arrastando = None
+            # limpa qualquer hover antigo, para recarregar handlers
+            self._hovered_block = None
+            if self._has_moved and not self._is_restoring:
+                self.app._mark_dirty()
+                self.app._update_macro_label()
         elif self.selecao_iniciada:
             self.finalizar_selecao_area(event)
         self._drag_group = None
@@ -196,6 +253,8 @@ class BlocoManager:
             acao = {"type":"startthread"}
         elif lt == "end thread":
             acao = {"type":"endthread"}
+        elif lt in ("loopend", "fim loop"):
+            acao = {"type":"loopend"}
         bloco = {
             "id": bloco_id,
             "rect": rect,
@@ -223,7 +282,7 @@ class BlocoManager:
         # 7) IF-blocks ou handles “⊕”
         # --------------------------------------------------
         lt = nome.strip().lower()
-        if lt in ("se imagem", "ocr", "ocr duplo"):
+        if lt in ("se imagem", "ocr", "ocr duplo", "se variavel"):
             cx = x + z(w0) / 2
             r  = z(5)
 
@@ -243,11 +302,11 @@ class BlocoManager:
             self.canvas.addtag_withtag(group_tag, h_false)
 
             self.canvas.tag_bind(
-                h_true, "<ButtonPress-1>",
-                lambda e, b=bloco: self._handle_press_if(b, e, branch="true"))
+                h_true,  "<ButtonPress-1>",
+                lambda e, b=bloco: self._handle_press_if(b, e, branch=True))
             self.canvas.tag_bind(
                 h_false, "<ButtonPress-1>",
-                lambda e, b=bloco: self._handle_press_if(b, e, branch="false"))
+                lambda e, b=bloco: self._handle_press_if(b, e, branch=False))
         else:
             size = z(10); half = size // 2
             cx = x + z(w0)//2
@@ -274,11 +333,6 @@ class BlocoManager:
                     h, "<ButtonPress-1>",
                     lambda e, b=bloco: self._handle_press(b, e))
             bloco["handles"] = handles
-
-            self.canvas.tag_bind(group_tag, "<Enter>",
-                                 lambda e, b=bloco: self._show_handles(b))
-            self.canvas.tag_bind(group_tag, "<Leave>",
-                                 lambda e, b=bloco: self._hide_handles(b))
 
         # --------------------------------------------------
         # 8) binds de duplo-clique (inalterados)
@@ -328,6 +382,10 @@ class BlocoManager:
         elif lt == "run_macro":
             self.canvas.tag_bind(rect,"<Double-Button-1>",
                                  lambda e, b=bloco: self._on_double_click_run_macro(b)
+             )
+        elif lt == "Variavel":
+            self.canvas.tag_bind(rect, "<Double-Button-1>",
+                                 lambda e, b=bloco: self._on_double_click_variavel(b)
              )
 
 
@@ -382,12 +440,18 @@ class BlocoManager:
             "text_to_sheet":   "text_to_sheet_icon.png",
             "telegram command":"telegram_command_icon.png",
             "run macro":         "run_macro_icon.png",
+            "variavel":          "variable_icon.png",
+            "se variavel": "if_variable_icon.png",
         }
         return mapa.get(nome.strip().lower(), "default.png")
 
     def canvas_clique(self, event):
-        if getattr(self.app.setas, "handle_drag", None):
-            return "break"
+        # ───────── early-returns ──────────────────────────────────────
+        # se estivermos no meio de um drag de conexão, não bloqueamos
+        # a atualização das setas — apenas saímos do mover propriamente dito
+        if getattr(self.app.setas, "handle_drag", False):
+            self.app.setas.atualizar_setas()
+            return
         item_atual = self.canvas.find_withtag("current")
         # Se o item atual é uma LINHA (seta), deixa o SetaManager cuidar
         # da seleção; não devolve "break" nem executa o resto da rotina.
@@ -402,7 +466,13 @@ class BlocoManager:
 
         # teste de clique em blocos
         for bloco in self.blocks:
-            x1, y1, x2, y2 = self.canvas.coords(bloco["rect"])
+            # tenta pegar as coordenadas do retângulo do bloco,
+            # mas somente se existir e tiver 4 valores
+            coords = self.canvas.coords(bloco.get("rect", None))
+            if not coords or len(coords) < 4:
+                # bloco sem retângulo válido → pula para o próximo bloco
+                continue
+            x1, y1, x2, y2 = coords
             if x1 <= x <= x2 and y1 <= y <= y2:
                 # ---------- inicia arrasto ----------
                 self.arrastando = bloco
@@ -580,6 +650,9 @@ class BlocoManager:
 
         # actualiza setas conectadas uma única vez
         self.app.setas.atualizar_setas()
+        # traz todas as setas para frente, para que continuem visíveis acima dos blocos
+        for seta_id, _, _ in self.app.setas.setas:
+            self.canvas.tag_raise(seta_id)
 
         # amplia área de scroll, se necessário
         self.canvas.configure(scrollregion=self.canvas.bbox("all"))
@@ -607,7 +680,11 @@ class BlocoManager:
 
         # percorre todos os blocos e seleciona os totalmente contidos
         for bloco in self.blocks:
-            bx1, by1, bx2, by2 = self.canvas.coords(bloco["rect"])
+            # tenta obter coords do retângulo; pula se não for válido
+            coords = self.canvas.coords(bloco.get("rect", None))
+            if not coords or len(coords) < 4:
+                continue
+            bx1, by1, bx2, by2 = coords
             if bx1 >= x1 and by1 >= y1 and bx2 <= x2 and by2 <= y2:
                 borda = self.canvas.create_rectangle(
                     bx1-2, by1-2, bx2+2, by2+2,
@@ -637,9 +714,13 @@ class BlocoManager:
         ]
         estado_setas = []
         for seta_id, origem, destino in self.app.setas.setas:
-            # pega a cor original (preferindo o cache do SetaManager)
-            info = self.app.setas._setas_info.get(seta_id)
-            if info and len(info) >= 3:
+            # pega a cor original (cache do SetaManager ou fallback do canvas)
+            info = self.app.setas._setas_info.get(seta_id, {})
+            if isinstance(info, dict):
+                # se o SetaManager salvou dict, extrai a cor
+                cor = info.get("color") or self.app.setas.canvas.itemcget(seta_id, "fill") or "#000"
+            elif info and len(info) >= 3:
+                # suporta tuple/list de 3 elementos
                 cor = info[2]
             else:
                 cor = self.app.setas.canvas.itemcget(seta_id, "fill") or "#000"
@@ -651,6 +732,61 @@ class BlocoManager:
             ))
         return (estado_blocos, estado_setas)
 
+    def clear(self):
+        """
+        Limpa o estado interno de blocos, pronto para reconstrução a partir do JSON.
+        """
+        # Remove referências a blocos anteriores
+        self.blocks.clear()
+        self.ocupados.clear()
+        # Limpa histórico de undo/redo
+        self._undo_stack.clear()
+        self._redo_stack.clear()
+        # Cancela arrasto ou seleção pendentes
+        self.arrastando = None
+        self._drag_group = None
+
+    def adicionar_bloco_com_id(self, bloco_id, tipo, name, params):
+        """
+        Adiciona um bloco usando ID, tipo e parâmetros vindos do fluxo JSON.
+        """
+        # desliga snapshots durante a restauração
+        self._is_restoring = True
+        # adiciona bloco do tipo correto
+        bloco = self.adicionar_bloco(tipo, "white")
+        if bloco is None:
+            self._is_restoring = False
+            return None
+        # ajusta ID e parâmetros originais
+        bloco["id"] = bloco_id
+        bloco["acao"] = params or {}
+        # ── Se params existir mas não tiver "type", injeta o tipo de bloco ──
+        if params is not None and "type" not in params:
+            # "tipo" (argumento) vem em PT (e.g. "Variavel", "Se Variavel", "Clique", etc.)
+            params["type"] = tipo.strip().lower()
+
+        # Recria label: para Run Macro exibimos só o nome do arquivo
+        if params and params.get("path"):
+            from os.path import basename
+            txt = basename(params["path"])
+            cor_label = "black"
+        elif params:
+            txt = _formatar_rotulo(params)
+            cor_label = "blue" if params.get("type") == "startthread" else "black"
+        else:
+            txt = name
+            cor_label = "black"
+        bloco["label_id"] = self.canvas.create_text(
+            bloco["x"] + bloco["width"] / 2,
+            bloco["y"] + bloco["height"] + 8,
+            text=txt,
+            font=("Arial", 9),
+            fill=cor_label
+        )
+
+        # religa snapshots
+        self._is_restoring = False
+        return bloco
 
     def _restaurar_snapshot(self, snap):
         """
@@ -725,7 +861,7 @@ class BlocoManager:
         for idx_o, idx_d, cor in setas_info:
             origem  = self.blocks[idx_o]
             destino = self.blocks[idx_d]
-            # preserva a cor original
+            # redesenha a linha usando o override de cor (verde/vermelho)
             self.app.setas.desenhar_linha(origem, destino, cor_override=cor)
 
 
@@ -793,6 +929,10 @@ class BlocoManager:
 
         # limpa seleção
         self.app.itens_selecionados.clear()
+        # marca deleção como modificação não salva
+        if not self._is_restoring:
+            self.app._mark_dirty()
+            self.app._update_macro_label()
 
 
     def recortar_selecionados(self, event=None):
@@ -887,12 +1027,17 @@ class BlocoManager:
 
 
     def _show_handles(self, bloco):
+        # 1) traz o retângulo e o ícone do bloco pra frente
+        self._bring_to_front(bloco)
+        # 2) reposiciona os ⊕ no canvas
         self._recolocar_handles(bloco)
+        # 3) mostra cada handle e garante que fique acima de tudo
         for h in bloco.get("handles", []):
             try:
+                self.canvas.lift(h)
                 self.canvas.itemconfigure(h, state="normal")
             except tk.TclError:
-                pass          # handle já foi destruído
+                pass
 
     def _hide_handles(self, bloco):
         for h in bloco.get("handles", []):
@@ -933,16 +1078,17 @@ class BlocoManager:
 
         # 2) Blocos normais: reposiciona os 4 ⊕, se existirem
         if bloco.get("handles"):
-            size  = 10
-            half  = size // 2
-            cy    = (y1 + y2) / 2
-    
+            size    = 30
+            half    = size // 2
+            overlap = 5
+            cy      = (y1 + y2) / 2
             novos = [
-                (cx,        y1 - half),        # topo
-                (cx,        y2 + half),        # base
-                (x1 - half, cy),               # esquerda
-                (x2 + half, cy)                # direita
+                (cx,                y1 - half + overlap),  # topo (um pouquinho dentro)
+                (cx,                y2 + half - overlap),  # base
+                (x1 - half + overlap, cy),                 # esquerda
+                (x2 + half - overlap, cy)                  # direita
             ]
+            # **FAZ O REPOSITION** de cada ⊕ no canvas
             for h, (hx, hy) in zip(bloco["handles"], novos):
                 self.canvas.coords(h, hx, hy)
 
@@ -1171,7 +1317,8 @@ class BlocoManager:
         add_label(
             actions     = bloco["_label_buffer"],
             update_list = finish,
-            tela        = self.app.root
+            tela        = self.app.root,
+            initial     = bloco.get("acao", {})
         )
 
     def _on_double_click_loop(self, bloco):
@@ -1428,10 +1575,11 @@ class BlocoManager:
         ]
 
         abrir_fork_dialog(
-            parent=self.app.root,
-            bloco=bloco,
-            conectar_ids=conectar_blocos,       # ← agora é lista de dicts de bloco
-            salvar_callback=self._salvar_forks
+        parent=self.app.root,
+        app=self.app,               # ← referência que contém .setas
+        bloco=bloco,
+        conectar_ids=conectar_blocos,
+        salvar_callback=self._salvar_forks
         )
 
 
@@ -1479,6 +1627,10 @@ class BlocoManager:
             fill="blue"
         )
 
+        # marca fork como modificação não salva
+        if not self._is_restoring:
+            self.app._mark_dirty()
+            self.app._update_macro_label()
         # 3) redesenha para aplicar estilos nas setas
         self.app.setas.atualizar_setas()
         
@@ -1488,6 +1640,15 @@ class BlocoManager:
             if b["id"] == bloco_id:
                 b.setdefault("acao", {})["forks"] = config
                 break
+        # grava no próprio bloco
+        for b in self.blocks:
+            if b["id"] == bloco_id:
+                b.setdefault("acao", {})["forks"] = config
+                break
+        # marca configuração de fork como modificação não salva
+        if not self._is_restoring:
+            self.app._mark_dirty()
+            self.app._update_macro_label()
         # redesenha setas para aplicar cor nova
         self.app.setas.atualizar_setas()
 
@@ -1600,6 +1761,105 @@ class BlocoManager:
             initial     = bloco.get("acao", {})
         )
 
+    def _on_double_click_variavel(self, bloco):
+        """
+        Abre a janela de Variável usando add_variavel(), grava em bloco['acao']
+        e redesenha o texto “NOME = VALOR” abaixo do bloco.
+        """
+        # 1) buffer temporário para undo e coleta de params
+        bloco["_var_buffer"] = []
+
+        def finish():
+            # 1a) empilha snapshot (para Ctrl+Z) antes da mudança
+            if not self._is_restoring:
+                self._undo_stack.append(self._snapshot())
+                self._redo_stack.clear()
+                self.app._mark_dirty()
+
+            # 1b) obtém do buffer (ou edição prévia) e grava em bloco['acao']
+            ac = bloco["_var_buffer"][-1] if bloco["_var_buffer"] else bloco.get("acao", {})
+            bloco["acao"] = ac
+
+            # 2) remove label antigo (se existir) e desenha o texto “NOME = VALOR”
+            if bloco.get("label_id"):
+                self.canvas.delete(bloco["label_id"])
+            bx, by = bloco["x"], bloco["y"]
+            w, h   = bloco["width"], bloco["height"]
+            nome_var = ac.get("var_name", "")
+            valor    = ac.get("var_value", "")
+            texto = f"{nome_var} = {valor}"
+            bloco["label_id"] = self.canvas.create_text(
+                bx + w/2,
+                by + h + 8,
+                text=texto,
+                font=("Arial", 9),
+                fill="black"
+            )
+
+        # 3) chama add_variavel no lugar de instanciar JanelaVariavel:
+        add_variavel(
+            actions     = bloco["_var_buffer"],
+            update_list = finish,
+            tela        = self.app.root,
+            initial     = bloco.get("acao", {})
+        )
+
+    def _on_double_click_se_variavel(self, bloco):
+        """
+        Abre a janela de “Se Variável”. Após o usuário confirmar,
+        grava em bloco["acao"] os parâmetros e desenha abaixo do bloco
+        algo como “<var> <op> <valor>”.
+        """
+        # Buffer temporário para permitir undo
+        bloco["_se_var_buffer"] = []
+
+        def finish():
+            # 1) empilha snapshot para Undo
+            if not self._is_restoring:
+                self._undo_stack.append(self._snapshot())
+                self._redo_stack.clear()
+                self.app._mark_dirty()
+
+            # 2) obtém os params dos últimos dados no buffer (ou mantém os atuais)
+            ac = bloco["_se_var_buffer"][-1] if bloco["_se_var_buffer"] else bloco.get("acao", {})
+            bloco["acao"] = ac
+
+            # 3) Remove label anterior (se existir) e desenha “var op valor” abaixo
+            if bloco.get("label_id"):
+                self.canvas.delete(bloco["label_id"])
+            bx, by = bloco["x"], bloco["y"]
+            w, h   = bloco["width"], bloco["height"]
+            var_name = ac.get("var_name", "")
+            op       = ac.get("operator", "")
+            cmp_val  = ac.get("compare_value", "")
+            texto = f"{var_name} {op} {cmp_val}"
+            bloco["label_id"] = self.canvas.create_text(
+                bx + w/2,
+                by + h + 8,
+                text=texto,
+                font=("Arial", 9),
+                fill="black"
+            )
+
+        # Chama a janela de edição “Se Variável”
+        # Monta lista de nomes de variáveis já definidas em outros blocos do tipo "variavel"
+        nomes = []
+        for b in self.blocks:
+            tp = b["text"].strip().lower()
+            if tp == "variavel":
+                ac = b.get("acao", {})
+                nome_exist = ac.get("var_name")
+                if nome_exist:
+                    nomes.append(nome_exist)
+        # Passa var_names=nomes para a janela
+        add_se_variavel(
+            actions     = bloco["_se_var_buffer"],
+            update_list = finish,
+            tela        = self.app.root,
+            var_names   = nomes,
+            initial     = bloco.get("acao", {})
+        )
+
     def _on_canvas_double_click(self, event):
         # coordenadas do clique no canvas
         x, y = self.canvas.canvasx(event.x), self.canvas.canvasy(event.y)
@@ -1637,6 +1897,8 @@ class BlocoManager:
                 "text_to_sheet": self._on_double_click_text_to_sheet,
                 "telegram command": self._on_double_click_telegram_command,
                 "run macro": self._on_double_click_run_macro,
+                "variavel"     : self._on_double_click_variavel,
+                "se variavel": self._on_double_click_se_variavel,
             }
     
             if tipo in mapa:

@@ -1,10 +1,13 @@
 import tkinter as tk
-from tkinter import Toplevel, messagebox, Canvas
+from tkinter import Toplevel, Canvas
+from core import show_error, show_warning
 from tkinter import ttk
 from PIL import Image, ImageGrab, ImageTk
 import pytesseract
-from utils.google_sheet_util import append_next_row, get_sheet_tabs
+from utils.google_sheet_util import get_sheet_tabs
 from core.config_manager import ConfigManager
+from utils.area_select import pick_area
+from utils.live_preview import LivePreview
 
 
 def add_ocr_to_sheet(actions=None, update_list=None, tela=None, *, initial=None):
@@ -22,7 +25,7 @@ def add_ocr_to_sheet(actions=None, update_list=None, tela=None, *, initial=None)
             win.wm_attributes('-disabled', True)
         except Exception:
             pass
-        messagebox.showerror(title, msg, parent=win)
+        show_error(title, msg, parent=win)
         try:
             win.wm_attributes('-disabled', False)
         except Exception:
@@ -33,7 +36,7 @@ def add_ocr_to_sheet(actions=None, update_list=None, tela=None, *, initial=None)
             win.wm_attributes('-disabled', True)
         except Exception:
             pass
-        messagebox.showwarning(title, msg, parent=win)
+        show_warning(title, msg, parent=win)
         try:
             win.wm_attributes('-disabled', False)
         except Exception:
@@ -42,9 +45,9 @@ def add_ocr_to_sheet(actions=None, update_list=None, tela=None, *, initial=None)
     # — Constantes e estado —
     BASE_W, BASE_H = 220, 120
     coords = {'x':0, 'y':0, 'w':0, 'h':0}
-    refresher = {'job': None}
     thumbs = {}
     scale_var = tk.IntVar(value=1)
+    scale_val = 1
     coord_var = tk.StringVar(value="(não selecionada)")
 
     # — Carrega configurações iniciais —
@@ -74,25 +77,15 @@ def add_ocr_to_sheet(actions=None, update_list=None, tela=None, *, initial=None)
             canvas_prev.create_image(0, 0, image=ph, tags='prev', anchor='nw')
             thumbs['full'] = ph
 
-    def _refresh():
-        if coords['w']>0 and coords['h']>0:
-            x, y, w, h = coords['x'], coords['y'], coords['w'], coords['h']
-            snap = ImageGrab.grab(bbox=(x, y, x+w, y+h))
-            if scale_var.get() > 1:
-                snap = snap.resize((snap.width*scale_var.get(), snap.height*scale_var.get()), Image.LANCZOS)
-            _display(snap)
-        refresher['job'] = win.after(300, _refresh)
-
     def _start_refresh():
-        if refresher['job'] is None:
-            _refresh()
+        preview.start()
 
     def _stop_refresh():
-        if refresher['job'] is not None:
-            win.after_cancel(refresher['job'])
-            refresher['job'] = None
+        preview.stop()
 
     def on_scale_change(*_):
+        nonlocal scale_val
+        scale_val = int(scale_var.get())      # ← captura na UI-thread
         _stop_refresh()
         _start_refresh()
         win.update_idletasks()
@@ -103,31 +96,10 @@ def add_ocr_to_sheet(actions=None, update_list=None, tela=None, *, initial=None)
         win.geometry(f"{rw}x{rh}+{px + (pw - rw)//2}+{py + (ph - rh)//2}")
 
     def selecionar_area():
-        win.withdraw()
-        ov = Toplevel(win)
-        ov.attributes('-fullscreen', True)
-        ov.attributes('-alpha', 0.3)
-        ov.grab_set()
-        cvs = Canvas(ov, cursor='cross')
-        cvs.pack(fill='both', expand=True)
-        rect = [None]
-        sx = sy = 0
-        def down(e):
-            nonlocal sx, sy
-            sx, sy = e.x, e.y
-            rect[0] = cvs.create_rectangle(sx, sy, sx, sy, outline='red', width=2)
-        def drag(e): cvs.coords(rect[0], sx, sy, e.x, e.y)
-        def up(e):
-            x1, y1, x2, y2 = cvs.coords(rect[0])
-            ov.destroy()
-            win.deiconify()
-            coords.update({'x':int(min(x1,x2)), 'y':int(min(y1,y2)), 'w':int(abs(x2-x1)), 'h':int(abs(y2-y1))})
-            coord_var.set(f"x={coords['x']} y={coords['y']} w={coords['w']} h={coords['h']}")
-            _start_refresh()
-        cvs.bind('<ButtonPress-1>', down)
-        cvs.bind('<B1-Motion>', drag)
-        cvs.bind('<ButtonRelease-1>', up)
-        ov.bind('<Escape>', lambda e: (ov.destroy(), win.deiconify()))
+        pick_area(parent=win,
+                  coords_dict=coords,
+                  text_target=coord_var,
+                  after=_start_refresh)
 
     def on_test():
         if coords['w']==0:
@@ -150,7 +122,23 @@ def add_ocr_to_sheet(actions=None, update_list=None, tela=None, *, initial=None)
         if not tab_var.get().strip():
             safe_error("Erro", "Selecione a aba da planilha.")
             return
+
+        # 1) Faz o snapshot da área selecionada
+        bbox = (coords['x'], coords['y'],
+                coords['x'] + coords['w'], coords['y'] + coords['h'])
+        snap = ImageGrab.grab(bbox=bbox)
+        # 2) Aplica zoom, se houver
+        if scale_var.get() > 1:
+            snap = snap.resize(
+                (snap.width * scale_var.get(),
+                 snap.height * scale_var.get()),
+                Image.LANCZOS
+            )
+        # 3) Executa OCR
+        texto = pytesseract.image_to_string(snap, lang='por').strip()
+
         tab_id = tab_map.get(tab_var.get().strip())
+        # 4) Monta a ação incluindo o texto extraído
         ac = {
             "type": "text_to_sheet",
             "x": coords['x'],
@@ -160,7 +148,8 @@ def add_ocr_to_sheet(actions=None, update_list=None, tela=None, *, initial=None)
             "scale": scale_var.get(),
             "sheet": sheet_var.get(),
             "column": column_var.get().strip(),
-            "tab_id": tab_id
+            "tab_id":  tab_id,
+            "text":    texto           # ← agora temos o campo esperado
         }
         actions.append(ac)
         update_list()
@@ -230,8 +219,21 @@ def add_ocr_to_sheet(actions=None, update_list=None, tela=None, *, initial=None)
 
     prev = ttk.Labelframe(win, text="Visualização")
     prev.grid(row=1, column=0, sticky="nsew", padx=15, pady=5)
-    canvas_prev = Canvas(prev, width=BASE_W, height=BASE_H, highlightthickness=1, highlightbackground="#999")
+    canvas_prev = Canvas(prev, width=BASE_W, height=BASE_H,
+                         highlightthickness=1, highlightbackground="#999")
     canvas_prev.grid(row=0, column=0, padx=10, pady=10)
+
+    # agora que canvas_prev e scale_var existem, criamos o preview
+    preview = LivePreview(
+        canvas_prev,
+        lambda: (coords['x'], coords['y'],
+                 coords['x']+coords['w'], coords['y']+coords['h'])
+                 if coords['w'] else None,
+        interval=0.30,
+        transform=lambda im: im.resize(
+            (im.width*scale_val, im.height*scale_val), Image.LANCZOS)
+                 if scale_val > 1 else im
+    )
 
     btns = ttk.Frame(win)
     btns.grid(row=2, column=0, sticky="e", padx=15, pady=(5,15))
@@ -259,6 +261,10 @@ def add_ocr_to_sheet(actions=None, update_list=None, tela=None, *, initial=None)
 
     win.deiconify()
     win.focus_force()
-    win.bind('<Return>', lambda e: on_ok())
-    win.bind('<Escape>', lambda e: on_cancel())
+    win.bind('<Return>', lambda e: on_ok() or "break")
+    # captura ESC no overlay e impede que chegue à janela principal
+    def _on_esc(event):
+        on_cancel()
+        return "break"
+    win.bind('<Escape>', _on_esc)
     win.wait_window()

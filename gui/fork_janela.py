@@ -1,8 +1,9 @@
 import tkinter as tk
-from tkinter import messagebox
+from core import show_warning
+import os
 
 
-def abrir_fork_dialog(parent, bloco, conectar_ids, salvar_callback):
+def abrir_fork_dialog(parent, app, bloco, conectar_ids, salvar_callback):
     """
     parent         → janela principal
     bloco          → dicionário do bloco Start Thread
@@ -104,6 +105,11 @@ def abrir_fork_dialog(parent, bloco, conectar_ids, salvar_callback):
                 else:
                     x, y, w, h = acao['region'].values()
                     txt = f"Screenshot: reg ({x},{y},{w}×{h})"
+            elif tipo == "startthread":
+                txt = acao.get("thread_name", "Start Thread")
+            elif tipo == "run_macro":
+                # exibe apenas o nome do arquivo de macro
+                txt = os.path.basename(acao.get("path", "")) or "Run Macro"
             else:
                 txt = dest.get("text", f"Block {dest.get('id')}")
 
@@ -144,26 +150,35 @@ def abrir_fork_dialog(parent, bloco, conectar_ids, salvar_callback):
 
     # --- Botões OK / Cancelar ----------------------------------------
     def on_ok():
-        sel = principal_var.get()
+        # 1) id escolhido
+        sel = principal_var.get()          # <– continua int aqui
         if sel == -1:
-            messagebox.showwarning(
+            show_warning(
                 "Erro",
                 "Selecione um destino para Nova Thread."
             )
             return
+
+        # 2) constrói o mapa forks garantindo
+        #    que **todas** as chaves sejam string
         config = {
-            dest["id"]: (
-                "Continuar Fluxo" if dest["id"] == sel
-                else "Nova Thread"
+            str(dest["id"]): (
+                "Continuar Fluxo" if dest["id"] == sel else "Nova Thread"
             )
             for dest in conectar_ids
         }
-        #print(f"[DEBUG][FORKS CONFIG] thread_name={thread_name_var.get()}, config={config}")
+
+        # 3) salva e força redesenho
         salvar_callback(
             bloco_id=bloco["id"],
             thread_name=thread_name_var.get(),
             config=config
         )
+        app.setas.atualizar_setas()
+        if hasattr(app, "_mark_dirty"):
+            app._mark_dirty()
+
+        # 4) fecha a janela ✅
         dlg.destroy()
 
     btns = tk.Frame(dlg)

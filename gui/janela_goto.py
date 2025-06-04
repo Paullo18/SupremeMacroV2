@@ -1,5 +1,6 @@
 import tkinter as tk
-from tkinter import Toplevel, Frame, StringVar, Label, Button, messagebox, ttk
+from tkinter import Toplevel, Frame, StringVar, Label, Button, ttk
+from core import show_warning
 
 def add_goto(actions, update_list, tela, *, initial=None, labels_existentes=None):
     """
@@ -44,7 +45,7 @@ def add_goto(actions, update_list, tela, *, initial=None, labels_existentes=None
     def _confirm():
         destino = label_var.get().strip()
         if not destino:
-            messagebox.showwarning("Campo vazio", "Escolha a Label de destino.")
+            show_warning("Campo vazio", "Escolha a Label de destino.")
             return
         ac = {"type": "goto", "label": destino}
         nome = name_var.get().strip()

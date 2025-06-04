@@ -1,73 +1,21 @@
-import tkinter as tk
-from tkinter import Toplevel, IntVar, StringVar, Label, Entry, Button, Frame, Canvas, messagebox
+from tkinter import Toplevel, IntVar, StringVar, Label, Entry, Button, Frame, Canvas
 from tkinter import ttk
-import pyautogui, threading, time, keyboard, os, sys
-from PIL import ImageTk
+from PIL import ImageTk, ImageGrab, Image
+import pyautogui, threading, keyboard, os, sys
+from utils.area_select import select_area
+from utils.live_preview import LivePreview
+import tempfile, uuid
+from core.executar import _ui_async
+#import core.executar
+#messagebox = core.executar.messagebox
+import thread_safe_patch
+from core import show_warning
 
 # Utility to get base_dir for bundled resources
 def get_base_dir():
     if getattr(sys, 'frozen', False):
         return sys._MEIPASS
     return os.path.dirname(__file__)
-
-
-def select_area():
-    """
-    Abre um overlay fullscreen semi‑transparente.
-    Clique e arraste define o retângulo.
-    ESC cancela (retorna None).
-    No release do botão esquerdo, retorna (x1,y1,x2,y2).
-    """
-    coords = {}
-    result = {}
-
-    def on_button_press(e):
-        coords['x1'], coords['y1'] = e.x_root, e.y_root
-        # cria o retângulo invisível inicialmente
-        result['rect'] = overlay.create_rectangle(
-            coords['x1'], coords['y1'], e.x_root, e.y_root,
-            outline='red', width=2
-        )
-
-    def on_mouse_move(e):
-        if 'rect' in result:
-            overlay.coords(result['rect'],
-                          coords['x1'], coords['y1'],
-                          e.x_root,    e.y_root)
-
-    def on_button_release(e):
-        coords['x2'], coords['y2'] = e.x_root, e.y_root
-        # fecha overlay e retorna
-        root.quit()
-
-    def on_escape(e):
-        coords.clear()
-        root.quit()
-
-    root = tk.Tk()
-    root.attributes('-fullscreen', True)
-    # leve transparência (50%) no fundo
-    root.attributes('-alpha', 0.3)
-    root.configure(bg='black')
-
-    overlay = tk.Canvas(root, cursor='cross')
-    overlay.pack(fill='both', expand=True)
-
-    overlay.bind('<ButtonPress-1>', on_button_press)
-    overlay.bind('<B1-Motion>',    on_mouse_move)
-    overlay.bind('<ButtonRelease-1>', on_button_release)
-    root.bind('<Escape>', on_escape)
-
-    root.mainloop()
-    root.destroy()
-
-    if not coords:
-        return None
-
-    x1, y1 = coords['x1'], coords['y1']
-    x2, y2 = coords['x2'], coords['y2']
-    # normalize
-    return (min(x1,x2), min(y1,y2), max(x1,x2), max(y1,y2))
 
 
 def add_click(actions, update_list, tela, *, initial=None):
@@ -78,6 +26,8 @@ def add_click(actions, update_list, tela, *, initial=None):
     janela.grab_set()
     janela.resizable(False, False)
 
+    _tkvars = []
+
     # Container de widgets
     container = Frame(janela)
     container.pack(padx=10, pady=10, fill='x')
@@ -85,28 +35,46 @@ def add_click(actions, update_list, tela, *, initial=None):
     # --- Nome do bloco (sempre visível) ---
     Label(container, text="Nome do bloco:").pack(anchor='w')
     label_var = StringVar(value=initial.get('name','') if initial else '')
+    _tkvars.append(label_var)
     Entry(container, textvariable=label_var).pack(anchor='w', fill='x', pady=(0,10))
 
     # --- Dropdown de Modo (combo branco) ---
     Label(container, text="Modo:").pack(anchor='w')
-    modo_var = StringVar(value=(initial.get('mode','Simples') if initial else 'Simples'))
-    modos = ['Simples', 'Aleatório']
+    # mapear código interno → texto no combo
+    mode_map = {
+        'Simples': 'Simples', 'fixo': 'Simples',
+        'aleatorio': 'Aleatório', 'Aleatório': 'Aleatório',
+        'imagem': 'Clicar em Imagem', 'Clicar em Imagem': 'Clicar em Imagem'
+    }
+    init_mode = initial.get('mode') if initial else 'Simples'
+    modo_display = mode_map.get(init_mode, 'Simples')
+    modo_var = StringVar(value=modo_display)
+    _tkvars.append(modo_var)
+    modos = ['Simples', 'Aleatório', 'Clicar em Imagem']
     modo_combo = ttk.Combobox(container, textvariable=modo_var, values=modos, state='readonly')
     modo_combo.pack(anchor='w', fill='x', pady=(0,10))
+    # quando mudar o combo, troca de frame
+    modo_var.trace_add('write', lambda *e: switch_mode())
 
     # --- Frames para cada modo ---
     simple_frame = Frame(container)
     random_frame = Frame(container)
+    image_frame  = Frame(container)
+
+    # placeholders para lembrar seleção ao reabrir
+    img_region   = None
     
     # --- Simple Mode Widgets ---
     # Coordenadas X/Y
     Label(simple_frame, text="X:").pack(anchor='w')
     var_x = IntVar(value=initial.get('x',0) if initial else 0)
+    _tkvars.append(var_x)
     entry_x = Entry(simple_frame, textvariable=var_x)
     entry_x.pack(anchor='w', fill='x')
 
     Label(simple_frame, text="Y:").pack(anchor='w', pady=(5,0))
     var_y = IntVar(value=initial.get('y',0) if initial else 0)
+    _tkvars.append(var_y)
     entry_y = Entry(simple_frame, textvariable=var_y)
     entry_y.pack(anchor='w', fill='x', pady=(0,10))
 
@@ -125,29 +93,38 @@ def add_click(actions, update_list, tela, *, initial=None):
         else:
             actions.append(nova_acao)
         update_list()
+        _detach_vars()
         janela.destroy()
 
+    # ------------------------------------------------------------------
+    # CAPTURA MANUAL  (modo Simples)  —  sem threads
+    # ------------------------------------------------------------------
     def monitor_mouse_manual():
-        while True:
-            try:
-                x, y = pyautogui.position()
-                if not entry_x.winfo_exists():
-                    break
-                var_x.set(x)
-                var_y.set(y)
-                time.sleep(0.02)
-                if keyboard.is_pressed('F2'):
-                    status_lbl.config(text=f"Capturado: ({x}, {y})", fg="green")
-                    janela.update_idletasks()
-                    break
-            except tk.TclError:
-                break
+        """Atualiza X/Y a cada 20 ms até o usuário pressionar F2."""
+        # se a janela já foi fechada, aborta
+        if not entry_x.winfo_exists():
+            return
+
+        x, y = pyautogui.position()
+        var_x.set(x)
+        var_y.set(y)
+
+        # F2 captura a posição
+        if keyboard.is_pressed('F2'):
+            status_lbl.config(text=f"Capturado: ({x}, {y})", fg="green")
+            start_btn.config(state='active')
+            return        # para o loop
+
+        # agenda a próxima leitura em 20 ms
+        janela.after(20, monitor_mouse_manual)
 
     def start_capture_manual():
+        """Inicia a captura; entra no loop via after()."""
         start_btn.config(state='disabled')
         status_lbl.config(text="Aguardando F2...", fg="red")
         status_lbl.pack(anchor='w', pady=(0,10))
-        threading.Thread(target=monitor_mouse_manual, daemon=True).start()
+
+        monitor_mouse_manual()          # primeira chamada
 
     start_btn = Button(simple_frame, text="Iniciar Captura", command=start_capture_manual)
     start_btn.pack(anchor='w', pady=(0,10))
@@ -163,45 +140,106 @@ def add_click(actions, update_list, tela, *, initial=None):
 
     region = None
     stop_live = threading.Event()
+    preview = LivePreview(live_canvas, lambda: region)
 
     def select_region():
         nonlocal region
         stop_live.set()
-        time.sleep(0.05)
-        # método de seleção com overlay e ESC (estenda conforme seu código)
-        #from region_select import select_area  # stub: precisa implementar
-        region = select_area()
+
+        # ---- prepara / solta modalidade ----
+        modal = janela.grab_current() is janela
+        if modal:
+            janela.grab_release()
+
+        janela.withdraw()                # <-- esconde a janela
+        region = select_area(parent=janela)   # overlay agora em foco
+        janela.deiconify()               # mostra de novo
+
+        if modal:                        # devolve modalidade
+            janela.grab_set()
+
         if region:
-            x1,y1,x2,y2 = region
+            x1, y1, x2, y2 = region
             coords_lbl.config(text=f"({x1},{y1})-({x2},{y2})")
         start_live_preview()
 
     def start_live_preview():
-        stop_live.clear()
-        def live_loop():
-            while not stop_live.is_set():
-                if region:
-                    x1,y1,x2,y2 = region
-                    pil_img = pyautogui.screenshot(region=(x1,y1,x2-x1,y2-y1))
-                    # converte para PhotoImage via PIL
-                    photo = ImageTk.PhotoImage(pil_img)
-                    live_canvas.delete('all')  # limpa frame anterior
-                    live_canvas.create_image(0, 0, anchor='nw', image=photo)
-                    # mantém referência para não ser coletado
-                    live_canvas.image = photo
-                time.sleep(0.2)
-        threading.Thread(target=live_loop, daemon=True).start()
+        preview.start()
+    
+    def stop_live_preview():
+        preview.stop()
 
     Button(random_frame, text="Selecionar Região", command=select_region).pack(anchor='w', pady=(0,10))
 
+    # --- Image Mode Widgets ---
+    Label(image_frame, text="Template (imagem):").pack(anchor='w')
+    img_canvas = Canvas(image_frame, width=200, height=100, bg='gray')
+    img_canvas.pack(anchor='w', pady=(0,10))
+    # se reabrindo com initial, carrega template salvo
+    if initial and init_mode == 'imagem':
+        path = initial.get('template_path')
+        if path and os.path.exists(path):
+            pil = Image.open(path)
+            img_template = pil
+            tkim = ImageTk.PhotoImage(pil)
+            img_canvas.create_image(0,0,anchor='nw', image=tkim)
+            img_canvas.image = tkim
+    def select_template():
+        nonlocal img_template
+        # seleciona área da tela como template
+        bbox = select_area(parent=janela)
+        if not bbox:
+            return
+        x1, y1, x2, y2 = bbox
+        # captura screenshot da região
+        pil_img = ImageGrab.grab(bbox=(x1, y1, x2, y2))
+        img_template = pil_img
+        tk_img = ImageTk.PhotoImage(pil_img)
+        img_canvas.create_image(0,0,anchor='nw', image=tk_img)
+        img_canvas.image = tk_img
+    Button(image_frame, text="Selecionar Imagem", command=select_template).pack(anchor='w', pady=(0,10))
+
+    Label(image_frame, text="Região de busca (live):").pack(anchor='w')
+    reg_canvas = Canvas(image_frame, width=200, height=100, bg='gray')
+    reg_canvas.pack(anchor='w', pady=(0,10))
+    # placeholders para região e preview
+    img_region = None
+    img_preview = None
+    # se reabrindo com modo 'imagem', restaura região e inicia live preview
+    if initial and init_mode == 'imagem':
+        x, y = initial.get('x',0), initial.get('y',0)
+        w, h = initial.get('w',0), initial.get('h',0)
+        if w > 0 and h > 0:
+            img_region = (x, y, x+w, y+h)
+            img_preview = LivePreview(reg_canvas, lambda: img_region)
+            img_preview.start()
+    def select_region_live():
+        nonlocal img_region, img_preview
+        # seleciona área da tela para busca
+        region = select_area(parent=janela)
+        if not region:
+            return
+        img_region = region
+        if img_preview:
+            img_preview.stop()
+        img_preview = LivePreview(reg_canvas, lambda: img_region)
+        img_preview.start()
+    Button(image_frame, text="Selecionar Região", command=select_region_live).pack(anchor='w', pady=(0,10))
+
     # --- Atualiza visibilidade de frames conforme modo ---
     def switch_mode(*args):
-        if modo_var.get() == 'Simples':
-            random_frame.forget()
+        mode = modo_var.get()
+        # esconde todos os frames
+        simple_frame.forget()
+        random_frame.forget()
+        image_frame.forget()
+        # mostra apenas o frame ativo
+        if mode == 'Simples':
             simple_frame.pack(fill='x')
-        else:
-            simple_frame.forget()
+        elif mode == 'Aleatório':
             random_frame.pack(fill='x')
+        else:  # 'Clicar em Imagem'
+            image_frame.pack(fill='x')
     modo_var.trace_add('write', switch_mode)
     switch_mode()
 
@@ -218,8 +256,15 @@ def add_click(actions, update_list, tela, *, initial=None):
         start_live_preview()
 
     # --- Botões OK e Cancelar ---
+    def _detach_vars():
+        # ➋ quebra o vínculo Tcl → evita RuntimeError no __del__
+        for v in _tkvars:
+            v._tk = None
+
     def on_cancel():
         stop_live.set()
+        stop_live_preview() 
+        _detach_vars()
         janela.destroy()
     btn_frame = Frame(janela)
     btn_frame.pack(fill='x', padx=10, pady=(0,10))
@@ -227,14 +272,15 @@ def add_click(actions, update_list, tela, *, initial=None):
     # Função de confirmação para o modo Aleatório
     def confirm_random(event=None):
         stop_live.set()
+        stop_live_preview()
         if not region:
-            messagebox.showwarning("Atenção", "Selecione antes a região.")
+            thread_safe_patch._ui_async(show_warning, "Atenção", "Selecione antes a região.")
             return
         x1, y1, x2, y2 = region
         w, h = x2 - x1, y2 - y1
         nova_acao = {
             "type": "click",
-            "mode": "Aleatório",
+            "mode": "aleatorio",
             "x": x1, "y": y1,
             "w": w, "h": h,
         }
@@ -246,21 +292,71 @@ def add_click(actions, update_list, tela, *, initial=None):
         else:
             actions.append(nova_acao)
         update_list()
+        _detach_vars()
         janela.destroy()
 
+    # --- Função de confirmação para o modo “Clicar em Imagem” ---
+    def confirm_image(event=None):
+        # interrompe qualquer preview ativo
+        stop_live.set()
+        try:
+            stop_live_preview()
+        except NameError:
+            pass
+        # valida se template e região foram escolhidos
+        if img_template is None or img_region is None:
+            _ui_async(show_warning, "Atenção", "Selecione antes o template e a região de busca.")
+            return
+        # salva o template num arquivo temporário
+        tmpdir = tempfile.gettempdir()
+        fname = f"template_{uuid.uuid4().hex}.png"
+        template_path = os.path.join(tmpdir, fname)
+        img_template.save(template_path)
+
+        x1, y1, x2, y2 = img_region
+        w, h = x2 - x1, y2 - y1
+        nova_acao = {
+            "type":          "click",
+            "mode":          "imagem",
+            "template_path": template_path,
+            "x":             x1,
+            "y":             y1,
+            "w":             w,
+            "h":             h,
+        }
+        name = label_var.get().strip()
+        if name:
+            nova_acao["name"] = name
+        if initial is not None:
+            initial.update(nova_acao)
+        else:
+            actions.append(nova_acao)
+        update_list()
+        _detach_vars()
+        janela.destroy()
+
+    # mostra o frame correto logo na abertura
+    switch_mode()
     # Substitui o handler do OK conforme o modo selecionado
     def on_ok(event=None):
-        if modo_var.get() == 'Simples':
+        modo = modo_var.get()
+        if modo == 'Simples':
             confirm_manual()
-        else:
+        elif modo == 'Aleatório':
             confirm_random()
+        else:  # 'Clicar em Imagem'
+            confirm_image()
 
     Button(btn_frame, text="Cancelar", width=10, command=on_cancel).pack(side='right', padx=(5,0))
     Button(btn_frame, text="OK",       width=10, command=on_ok).pack(side='right')
 
     # --- Global hotkeys ---
-    janela.bind_all("<Return>", confirm_manual)
-    janela.bind_all("<Escape>", lambda e: (stop_live.set(), janela.destroy()))
+    janela.bind("<Return>", lambda e: on_ok() or "break")
+    # captura ESC no overlay e impede que chegue à janela principal
+    def _on_esc(event):
+        on_cancel()
+        return "break"
+    janela.bind("<Escape>", _on_esc)
 
     # --- Centralizar janela ---
     def _recentralizar():

@@ -1,13 +1,27 @@
 from util import clicou_em_linha
-import os
-from PIL import Image, ImageTk
+import itertools, uuid
 
 class SetaManager:
     def __init__(self, canvas, blocos):
         self.canvas = canvas
         self.blocos = blocos
-        self.setas = []  # Mantém formato (seta_id, origem, destino) para compatibilidade
-        self._setas_info = {}  # Dicionário para armazenar informações adicionais: {seta_id: (segmentos, tag)}
+        #self.setas = []  # Mantém formato (seta_id, origem, destino) para compatibilidade
+        #self._setas_info = {}  # Dicionário para armazenar informações adicionais: {seta_id: (segmentos, tag)}
+
+        # -----------------------------------------------------------------
+        #  NOVO MODELO DE DADOS:
+        #  • cada conexão recebe um id lógico (cid) independente dos ids
+        #    de segmento criados pelo canvas;
+        #  • _setas_info é indexado por cid, não mais por id de segmento.
+        # -----------------------------------------------------------------
+        self.setas = []           # [(cid, origem, destino)]
+        self._setas_info = {}     # {cid: {"segments":[...], "tag":str,
+                                  #        "color":str, "branch":bool|None,
+                                  #        "from": origem, "to": destino}}
+        self._segmento2cid = {}   # {segmento_id: cid}
+        self._cid_counter = itertools.count()   # gera 0,1,2… em hex (pode trocar por uuid4)
+
+        self._edges = {}
         self.bloco_origem = None
         self.conectando = False
         self.ultima_seta_selecionada = None  # ← guarda referência da última seta azul
@@ -27,37 +41,83 @@ class SetaManager:
         self.patch_undo()
         self.patch_snapshot()
 
+    def clear(self):
+        """
+        Limpa o estado interno do gerenciador de setas,
+        preparando-o para uma reconstrução completa do canvas.
+        """
+        self.setas.clear()
+        self._setas_info.clear()
+        self.bloco_origem = None
+        self.conectando = False
+        self.ultima_seta_selecionada = None
+        self.seta_highlights.clear()
+        self.linha_temporaria = None
+        self.handle_drag = None
+        self.alvo_proximo = None
+        self._cor_original.clear()
+
     def patch_undo(self):
         """
-        Depois que um snapshot é restaurado (Ctrl+Z ou Ctrl+Y),
-        forçamos o redesenho das setas.
+        Garante redesenho das setas + restaura zoom correto em undo/redo.
         """
-        if hasattr(self.blocos, "desfazer"):
-            original_desfazer = self.blocos.desfazer
+        def _wrap(nome):
+            if hasattr(self.blocos, nome):
+                original = getattr(self.blocos, nome)
 
-            def patched_desfazer(self_blocos, *args, **kwargs):
-                resultado = original_desfazer(*args, **kwargs)
-                # Blocos voltaram para a posição salva ➔ redesenha setas
-                self.atualizar_setas()
-                return resultado
+                def patched(self_blocos, *a, **kw):
+                    app   = self_blocos.app
+                    zoom_before = app._zoom_scale
 
-            # substitui o método
-            self.blocos.desfazer = patched_desfazer.__get__(self.blocos,
-                                                        type(self.blocos))
-    def _obter_segmentos(self, seta_id):
-        #info = self._setas_info.get(seta_id)
-        #return info[0] if info else [seta_id]
+                    # 1) volta para 100 % antes de limpar / recriar
+                    if abs(zoom_before - 1.0) > 1e-6:
+                        app._set_zoom(1.0)
+
+                    # 2) executa desfazer/refazer original
+                    result = original(*a, **kw)
+
+                    # 3) redesenha setas (já sem escala aplicada)
+                    self.atualizar_setas()
+
+                    # 4) recoloca o zoom que o usuário tinha
+                    if abs(zoom_before - 1.0) > 1e-6:
+                        app._set_zoom(zoom_before)
+
+                    return result
+
+                setattr(self.blocos, nome, patched.__get__(self.blocos,
+                                                           type(self.blocos)))
+
+        _wrap("desfazer")   # Ctrl + Z
+        _wrap("refazer")    # Ctrl + Y
+
+
+    def _obter_segmentos(self, cid_or_seg):
         """
         Devolve a lista de segmentos que compõem essa seta.
         Se a seta for antiga (apenas um segmento), devolve [seta_id].
         """
-        if seta_id in self._setas_info:
-            return self._setas_info[seta_id][0]      # (segmentos, tag)
-        return [seta_id]
+        # resolve segmento solto → cid
+        cid = cid_or_seg if cid_or_seg in self._setas_info else \
+              self._segmento2cid.get(cid_or_seg)
+        info = self._setas_info.get(cid)
+
+        if isinstance(info, dict):                  # formato novo
+            return list(info.get("segments", []))
+        elif isinstance(info, (list, tuple)):       # formato legado
+            return [info[0]] if info else []
+        else:                                       # fallback (segmento solto)
+            return [cid_or_seg]
 
 
     def iniciar_conexao(self, bloco_origem, event, branch=None):
-        self.branch = branch  # salva se é true/false
+        # Normaliza: True / False / None
+        if branch is True:
+            self._branch_next = True
+        elif branch is False:
+            self._branch_next = False
+        else:
+            self._branch_next = None
         #  ⬇  pega o centro do bloco; se não existir, aborta silenciosamente
         centro = self._centro_bloco(bloco_origem)
         if centro is None:
@@ -141,7 +201,10 @@ class SetaManager:
             return                      # destino foi removido no meio do arrasto
         # ------------------------------------
         if destino:
-            self.desenhar_linha(origem, destino)
+            self.desenhar_linha(origem, destino, branch=self._branch_next)
+        self._branch_next = None          # limpa para não “vazar”
+        # libera o flag para não “vazar” pra seta seguinte
+        self._branch_next = None
 
     def atualizar_linha_temporaria(self, event):
         if self.linha_temporaria and self.bloco_origem:
@@ -599,38 +662,64 @@ class SetaManager:
             
         return pontos
 
-    def desenhar_linha(self, origem, destino, cor_override=None):
+    def desenhar_linha(self, origem, destino, branch=None, cor_override=None):
         """
         Desenha uma linha ortogonal entre dois blocos.
         """
+        # --- evita conexões duplicadas (mesma origem→destino) -----------
+        conexao_tag = f"seta_{origem.get('id',id(origem))}_{destino.get('id',id(destino))}"
+        for item in self.canvas.find_withtag(conexao_tag):
+            self.deletar_seta_por_id(item)            # remove linha antiga
         # Encontrar pontos de ancoragem nas bordas dos blocos
         ponto_origem, ponto_destino = self._encontrar_pontos_ancora(origem, destino)
         
         if ponto_origem is None or ponto_destino is None:
             return
             
-        # Determinar a cor da linha
-        # verifica se é fork marcado como Nova Thread
-        forks  = origem.get("acao", {}).get("forks", {})
-        dest_id = destino.get("id")
-        if dest_id in forks and forks[dest_id] == "Nova Thread":
-            color = "#0a84ff"   # azul
+        # ------------------------------------------------------------
+        # 1) Se ‘branch’ chegou True/False mas o bloco de origem NÃO
+        #    é condicional, corrige p/ None (normaliza macros antigas).
+        # ------------------------------------------------------------
+        def _is_condicional(bloco):
+            # 1º tenta 'type' (dos JSON/snapshots);
+            # 2º tenta 'text' (blocos vivos no canvas)
+            t = (bloco.get("type") or bloco.get("text") or "").lower()
+            return t.startswith("se ") or t.startswith("if") or \
+                   t in ("imagem", "ocr", "ocr duplo", "ocr_duplo")
+
+        if branch is not None and not _is_condicional(origem):
+            branch = None
+
+        # ------------------------------------------------------------
+        # 2) Escolhe cor: override  > branch (verde/vermelho) >
+        #                 forks azul               > default preto
+        # ------------------------------------------------------------
+        if cor_override is not None:
+            color = cor_override
+        elif branch is True:
+            color = "#009600"                 # verde
+        elif branch is False:
+            color = "#ff0000"                 # vermelho
         else:
-            # preserva cor antiga, se houver
-            if cor_override is not None:
-                color = cor_override
-            elif getattr(self, "branch", None) == "true":
-                color = "green"
-            elif getattr(self, "branch", None) == "false":
-                color = "red"
+            # Azul para ‘Nova Thread’ ou ‘Fluxo Padrão’
+            forks   = origem.get("acao", {}).get("forks", {})
+            dest_id = str(destino.get("id"))          # <<< chave do JSON é string
+            if dest_id in forks and forks[dest_id] in ("Nova Thread", "Fluxo Padrão"):
+                color = "#0a84ff"             # azul
             else:
-                color = "#000"
+                color = "#000000"             # preta
+     
+        # grava o valor (já normalizado) para serialização futura
+        branch_value = branch
+        # agora limpa a flag para o próximo arranque
+        self.branch = None
         # -------------------------------------
             
         # Criar um identificador único para esta conexão
         origem_id = origem.get("id", id(origem))
         destino_id = destino.get("id", id(destino))
         conexao_tag = f"seta_{origem_id}_{destino_id}"
+        eid = uuid.uuid4().hex
         
         # Obter coordenadas
         x1, y1 = ponto_origem
@@ -660,6 +749,8 @@ class SetaManager:
                 pontos = caminho_externo
         
         # Criar os segmentos de linha
+        # ---------- gera o cid e prepara lista de segmentos ----------
+        cid = f"{next(self._cid_counter):x}"
         segmentos = []
         
         # Se temos apenas dois pontos (linha reta), criar uma única linha
@@ -667,8 +758,9 @@ class SetaManager:
             linha_id = self.canvas.create_line(
                 pontos[0][0], pontos[0][1], pontos[1][0], pontos[1][1],
                 arrow="last", width=2, fill=color,
-                tags=("seta", conexao_tag)
+                tags=("seta", conexao_tag, f"cid_{cid}")
             )
+            self._segmento2cid[linha_id] = cid         # vínculo reverso
             segmentos.append(linha_id)
         else:
             # Criar segmentos intermediários sem seta
@@ -684,118 +776,218 @@ class SetaManager:
             linha_id = self.canvas.create_line(
                 pontos[-2][0], pontos[-2][1], pontos[-1][0], pontos[-1][1],
                 arrow="last", width=2, fill=color,
-                tags=("seta", conexao_tag)
+                tags=("seta", conexao_tag, f"cid_{cid}")
             )
+            self._segmento2cid[linha_id] = cid         # vínculo reverso
             segmentos.append(linha_id)
         
-        # Limpa a flag para a próxima conexão
-        self.branch = None
-        
-        # Armazenar a referência da seta
+        # Armazenar a referência da seta e seus metadados (incluindo branch)
         if segmentos:
-            # Armazenar no formato antigo para compatibilidade
-            self.setas.append((segmentos[-1], origem, destino))
-            # Armazenar informações adicionais em um dicionário separado
-            self._setas_info[segmentos[-1]] = (segmentos, conexao_tag, color)
+            self.setas.append((cid, origem, destino))
+            self._setas_info[cid] = {
+                "segments": segmentos,
+                "tag": conexao_tag,
+                "color": color,
+                "branch": branch_value,
+                "from": origem,
+                "to":   destino,
+            }
+            self.blocos.app._mark_dirty()
 
     def atualizar_setas(self, *args, **kwargs):
         """
-        Redesenha todas as setas preservando as cores originais
-        (verde, vermelho, azul ou preto) mesmo depois de mover blocos.
+        Cores garantidas em todas as ações:
+          • verde  (#009600)  – branch == True
+          • vermelho (#ff0000) – branch == False
+          • azul   (#0a84ff)  – forks == "Nova Thread"
+          • preto  (#000000)  – demais
+        Mantém cores em mover blocos e undo/redo, e
+        troca corretamente o azul quando muda a Nova Thread.
         """
-        # 1) Coletar todas as conexões e suas cores atuais
-        conexoes_coloridas = []   # [(origem, destino, cor), ...]
-        for seta_id, origem, destino in self.setas:
-            info = self._setas_info.get(seta_id)
-            cor  = info[2] if info and len(info) >= 3 else "#000"
-            conexoes_coloridas.append((origem, destino, cor))
-    
-        # 2) Apagar todos os segmentos existentes
-        for segs, *_ in self._setas_info.values():
+        def _cor_calculada(origem, destino, branch):
+            if branch is True:
+                return "#009600"
+            if branch is False:
+                return "#ff0000"
+
+            forks   = origem.get("acao", {}).get("forks", {})
+            dest_id = str(destino.get("id"))
+            if forks.get(dest_id) == "Nova Thread":
+                return "#0a84ff"
+            return "#000000"
+
+        # ------------------------------------------------------------------
+        snapshot = []     # [(origem, destino, branch, cor)]
+        for cid, origem, destino in self.setas:
+            info = self._setas_info.get(cid, {})
+
+            # ---- dados salvos ---------------------------------------------
+            if isinstance(info, dict):
+                branch     = info.get("branch")
+                cor_salva  = info.get("color")
+            elif isinstance(info, (list, tuple)) and len(info) > 3:
+                branch     = info[3]
+                cor_salva  = info[2] if len(info) > 2 else None
+            else:
+                branch, cor_salva = None, None
+
+            # ---- normaliza branch para blocos não-condicionais ------------
+            tipo = (origem.get("type") or origem.get("text") or "").lower()
+            condicional = (
+                tipo.startswith("se ") or tipo.startswith("if") or
+                tipo in ("imagem", "ocr", "ocr duplo", "ocr_duplo")
+            )
+            if not condicional and branch in (True, False):
+                branch = None
+
+            # ---- calcula cor ----------------------------------------------
+            cor_calc = _cor_calculada(origem, destino, branch)
+
+            # ---- fallback inteligente -------------------------------------
+            forks   = origem.get("acao", {}).get("forks", {})
+            dest_id = str(destino.get("id"))
+
+            usa_fallback = (
+                cor_calc == "#000000" and                # cálculo falhou
+                cor_salva and cor_salva != "#000000" and # há cor salva útil
+                (                                         # e **não** há info
+                    branch in (True, False)               # – condicional (OK)
+                    or dest_id not in forks               # – forks ausente
+                    or forks.get(dest_id) is None
+                )
+            )
+
+            cor = cor_salva if usa_fallback else cor_calc
+
+            snapshot.append((origem, destino, branch, cor))
+
+            # mantém branch normalizado no dicionário
+            if isinstance(info, dict):
+                info["branch"] = branch
+
+        # ------------------------------------------------------------------
+        # remove setas antigas
+        for meta in self._setas_info.values():
+            segs = meta.get("segments", []) if isinstance(meta, dict) else []
+            if not isinstance(segs, (list, tuple)):
+                segs = [segs]
             for sid in segs:
                 self.canvas.delete(sid)
-        for seta_id, _, _ in self.setas:
-            self.canvas.delete(seta_id)
-        self.canvas.update_idletasks()
-    
-        # 3) Limpar caches
         self._setas_info.clear()
         self.setas.clear()
-    
-        # 4) Recriar cada conexão com a cor que estava antes
-        for origem, destino, cor in conexoes_coloridas:
-            if (origem and destino
-                    and self._centro_bloco(origem)
-                    and self._centro_bloco(destino)):
-                self.desenhar_linha(origem, destino, cor_override=cor)
+        self._segmento2cid.clear()
 
-
+        # ------------------------------------------------------------------
+        # recria conexões com cor correta
+        for origem, destino, branch, cor in snapshot:
+            if (origem and destino and
+                    self._centro_bloco(origem) and self._centro_bloco(destino)):
+                self.desenhar_linha(
+                    origem, destino,
+                    branch=branch,
+                    cor_override=cor
+                )
 
     def remover_setas_de_bloco(self, bloco):
+        """
+        Remove apenas as setas que tenham 'origem == bloco' ou 'destino == bloco'.
+        As setas que não envolvem esse bloco devem ser preservadas.
+        """
         novas_setas = []
-        for seta_id, origem, destino in self.setas:
-            if origem == bloco or destino == bloco:
-                # Obter informações adicionais
-                if seta_id in self._setas_info:
-                    segmentos, tag, *_ = self._setas_info[seta_id]
-                    
-                    # Remover todos os segmentos
-                    for seg_id in segmentos:
-                        try:
-                            self.canvas.delete(seg_id)
-                        except:
-                            pass
-                            
-                    # Remover todos os itens com essa tag
-                    try:
-                        for item in self.canvas.find_withtag(tag):
-                            self.canvas.delete(item)
-                    except:
-                        pass
-                        
-                    # Remover do dicionário de informações
-                    del self._setas_info[seta_id]
-                else:
-                    # Formato antigo, apenas remover a seta
-                    try:
-                        self.canvas.delete(seta_id)
-                    except:
-                        pass
-            else:
-                novas_setas.append((seta_id, origem, destino))
-                
-        self.setas = novas_setas
 
-    def deletar_seta_por_id(self, seta_id):
-        # Obter informações adicionais
-        if seta_id in self._setas_info:
-            segmentos, tag, *_ = self._setas_info[seta_id]
-            
-            # Remover todos os segmentos
-            for seg_id in segmentos:
-                try:
+        for cid, origem, destino in self.setas:
+            # Se a seta não estiver ligada ao bloco sendo removido, mantemos
+            if origem is not bloco and destino is not bloco:
+                novas_setas.append((cid, origem, destino))
+                continue
+
+            # Caso contrário, removemos somente esta seta:
+            # 1) Tenta formato novo (cid → info)
+            info = self._setas_info.pop(cid, None)
+            if info:
+                segmentos = info["segments"]
+                tag       = info["tag"]
+
+                # 2) Apaga segmentos e limpa índice reverso
+                for seg_id in segmentos:
                     self.canvas.delete(seg_id)
-                except:
-                    pass
-                    
-            # Remover todos os itens com essa tag
-            try:
+                    self._segmento2cid.pop(seg_id, None)
+
+                # 3) Apaga quaisquer itens no canvas com a tag da conexão
                 for item in self.canvas.find_withtag(tag):
                     self.canvas.delete(item)
-            except:
-                pass
-                
-            # Remover do dicionário de informações
-            del self._setas_info[seta_id]
-        else:
-            # Formato antigo, apenas remover a seta
+                for item in self.canvas.find_withtag(f"cid_{cid}"):
+                    self.canvas.delete(item)
+            else:
+                # Formato legado: cid era o próprio id do segmento
+                self.canvas.delete(cid)
+
+        # Atualiza a lista interna apenas com as setas que sobraram
+        self.setas = novas_setas
+
+    def deletar_seta_por_id(self, cid_or_seg):
+        # ── Se recebeu um SEGMENTO em vez do ‘id’ principal da seta,
+        #     localizamos o pai correspondente. Assim qualquer parte
+        #     clicada da conexão apaga tudo.
+        # aceita tanto o cid como um segmento individual:
+        cid = cid_or_seg
+        if cid not in self._setas_info:
+            cid = self._segmento2cid.get(cid)        # traduz segmento→cid
+        if cid is None:
+            return
+        # 1) Apagar preview pendente (linha temporária)
+        if self.linha_temporaria:
             try:
-                self.canvas.delete(seta_id)
+                self.canvas.delete(self.linha_temporaria)
             except:
                 pass
+            self.linha_temporaria = None
+        # 2) Apagar handler de drag, se existir
+        if self.handle_drag:
+            _, temp = self.handle_drag
+            try:
+                self.canvas.delete(temp)
+            except:
+                pass
+            self.handle_drag = None
+        # 3) Limpar qualquer destaque residual dessa seta
+        hl = self.seta_highlights.pop(cid, None)
+        if hl:
+            try:
+                self.canvas.delete(hl)
+            except:
+                pass
+        # ────────────────────────────────────────────────────────────────
+        # 1) Pega e remove o registro de metadados (formato novo ou legado)
+        info = self._setas_info.pop(cid, None)
+
+        if info:
+            # formato novo → dict
+            if isinstance(info, dict):
+                segmentos = list(info.get("segments", []))
+                tag       = info.get("tag")
+            else:                             # formato legado → tupla/lista
+                segmentos = [info[0]] if info else []
+                tag       = info[1] if len(info) > 1 else ""
+
+            # 2) apaga segmentos e limpa índice reverso
+            for seg_id in segmentos:
+                self.canvas.delete(seg_id)
+                self._segmento2cid.pop(seg_id, None)
+
+            # 3) apaga itens com a tag da conexão e a tag cid_
+            for item in self.canvas.find_withtag(tag):
+                self.canvas.delete(item)
+            for item in self.canvas.find_withtag(f"cid_{cid}"):
+                self.canvas.delete(item)
+        # Se nem dict nem tupla: `cid` já era id de segmento
+            self.canvas.delete(cid)
         
-        # Remover a seta da lista
-        self.setas = [s for s in self.setas if s[0] != seta_id]
+        # 4) Remove a conexão da lista viva
+        self.setas = [s for s in self.setas if s[0] != cid]
+
+        # 5) Marca o projeto como alterado
+        self.blocos.app._mark_dirty()
 
     # Método público para limpar seleção (sem underscore)
     def limpar_selecao(self):

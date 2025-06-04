@@ -1,21 +1,30 @@
+import time
 import tkinter as tk
-from tkinter import ttk, filedialog, messagebox
+from tkinter import filedialog
 from blocos import BlocoManager
 from setas import SetaManager
 from eventos import bind_eventos
-from util import clicou_em_linha
 from PIL import Image, ImageTk
-from core.update_list import update_list
-from core.storage import export_macro_to_tmp, salvar_macro_gui, obter_caminho_macro_atual
-from core.executar import executar_macro_flow
+
+#import thread_safe_patch
+#thread_safe_patch.apply_thread_safety_patches()
+
+from core.storage import export_macro_to_tmp, salvar_macro_gui
+from core.executor import execute_macro as executar_macro_flow
 from gui.macro_status import MacroStatusWindow
 from gui.settings_window import SettingsDialog
 from gui.ocr_to_sheet import add_ocr_to_sheet
-from gui.telegram_command import add_telegram_command
 import json, os, shutil, threading
 import core.storage as storage
 from core.telegram_listener import start_telegram_bot
-from tkinter import messagebox
+#from tkinter import messagebox
+#from core.executar import process_ui_queue
+import core
+from core import process_main_thread_queue as process_ui_queue
+from core import show_info, show_error, ask_yes_no
+
+from gui.helpers.ui_helpers import centralizar_janela, criar_menubar, carregar_icone, adicionar_botao
+
 
 
 def macro_em_pasta_macros(path_):
@@ -24,53 +33,6 @@ def macro_em_pasta_macros(path_):
     macros_abs = os.path.abspath(storage.MACROS_DIR)
     return abs_path.endswith(os.sep + "macro.json") and abs_path.startswith(macros_abs + os.sep)
 
-def _formatar_rotulo(params: dict) -> str:
-        """Devolve o texto a ser exibido abaixo do bloco."""
-        # 1) nomes dados pelo usuário têm prioridade absoluta
-        if params.get("custom_name"):
-            return params["custom_name"]
-        if params.get("name"):
-            return params["name"]
-    
-        # 2) fallback para rótulos automáticos
-        tipo = params.get("type", "").lower()
-        if tipo == "click":
-            return f"Click @({params.get('x')},{params.get('y')})"
-        elif tipo == "delay":
-            return f"Delay: {params.get('time')}ms"
-        elif tipo == "goto":
-            return f"GOTO → {params.get('label')}"
-        elif tipo == "imagem":
-            return f"Img:{params.get('imagem')} @({params.get('x')},{params.get('y')},{params.get('w')},{params.get('h')})"
-        elif tipo == "label":
-            return f"Label: {params.get('name')}"
-        elif tipo == "loopstart":
-            return "INÍCIO LOOP INFINITO" if params.get("mode") != "quantidade" \
-                   else f"INÍCIO LOOP {params.get('count')}x"
-        elif tipo == "ocr":
-            return f"OCR: '{params.get('text')}'"
-        elif tipo == "ocr_duplo":
-            cond = params.get("condicao", "and").upper()
-            return f"OCR Duplo: '{params.get('text1')}' {cond} '{params.get('text2')}'"
-        elif tipo == "text":
-            txt = params.get("content", params.get("text", ""))
-            return f"TXT: '{txt[:18]}…'" if len(txt) > 20 else f"TXT: '{txt}'"
-
-        # exibe comando de atalho
-        elif tipo == "hotkey":
-            combo = params.get("command", params.get("content", ""))
-            return f"CMD: {combo}"
-        
-        elif tipo == "startthread":
-            return params.get("thread_name", "Thread")
-        elif tipo == "screenshot":
-            if params.get("mode") == "whole":
-                return "Screenshot: tela inteira"
-            else:
-                r = params.get("region", {})
-                return f"Screenshot: reg ({r.get('x')},{r.get('y')},{r.get('w')}×{r.get('h')})"
-        else:
-            return tipo.upper() or "Bloco"
 class FlowchartApp:
     def __init__(self, root):
         self.root = root
@@ -82,65 +44,50 @@ class FlowchartApp:
         self.root.protocol("WM_DELETE_WINDOW", self._on_closing)
 
         # ---------------- layout da janela -----------------
-        largura_janela, altura_janela = 1400, 890
-        largura_tela  = root.winfo_screenwidth()
-        altura_tela   = root.winfo_screenheight()
-        pos_x = (largura_tela // 2) - (largura_janela // 2)
-        pos_y = (altura_tela // 2) - (altura_janela // 2)
-        root.geometry(f"{largura_janela}x{altura_janela}+{pos_x}+{pos_y}")
+        centralizar_janela(self.root, 1400, 890)
 
         self.root.bind_all("<Control-r>", lambda evt: self.executar_macro())
         storage.app = self
 
-        # ————— Barra de Menu —————
-        menubar = tk.Menu(self.root)
+        # ————— Barra de Menu (refatorado via helper) —————
+        menus = {
+            "Arquivo": [
+                ("Novo", self.novo_arquivo),
+                ("Abrir...", self._acao_carregar),
+                ("Salvar", self.salvar_arquivo),
+                ("Salvar como...", self.salvar_como),
+                "separator",
+                ("Sair", self.root.quit)
+            ],
+            "Editar": [
+                ("Desfazer", self.desfazer),
+                ("Refazer", self.refazer),
+                "separator",
+                ("Copiar", self.copiar),
+                ("Colar", self.colar),
+                ("Recortar", self.recortar)
+            ],
+            "View": [
+                ("Mostrar Barra de Ferramentas", self.toggle_toolbar),
+                ("Mostrar Painel de Propriedades", self.toggle_properties)
+            ],
+            "Ações": [
+                ("Executar Macro", self.executar_macro),
+                ("Parar Macro", self.parar_macro)
+            ],
+            "Ferramentas": [
+                ("Opções...", self.abrir_configuracoes),
+                ("Testar OCR", self.testar_ocr)
+            ],
+            "Ajuda": [
+                ("Documentação", self.abrir_documentacao),
+                "separator",
+                ("Sobre", self.sobre)
+            ]
+        }
+        criar_menubar(self.root, menus)
 
-        # Arquivo
-        arquivo_menu = tk.Menu(menubar, tearoff=0)
-        arquivo_menu.add_command(label="Novo", command=self.novo_arquivo)
-        arquivo_menu.add_command(label="Abrir...", command=self._acao_carregar)
-        arquivo_menu.add_command(label="Salvar", command=self.salvar_arquivo)
-        arquivo_menu.add_separator()
-        arquivo_menu.add_command(label="Sair", command=self.root.quit)
-        menubar.add_cascade(label="Arquivo", menu=arquivo_menu)
-
-        # Editar
-        editar_menu = tk.Menu(menubar, tearoff=0)
-        editar_menu.add_command(label="Desfazer", command=self.desfazer)
-        editar_menu.add_command(label="Refazer", command=self.refazer)
-        editar_menu.add_separator()
-        editar_menu.add_command(label="Copiar",   command=self.copiar)
-        editar_menu.add_command(label="Colar",    command=self.colar)
-        editar_menu.add_command(label="Recortar", command=self.recortar)
-        menubar.add_cascade(label="Editar", menu=editar_menu)
-
-        # View (Exibir)
-        view_menu = tk.Menu(menubar, tearoff=0)
-        view_menu.add_checkbutton(label="Mostrar Barra de Ferramentas",  command=self.toggle_toolbar)
-        view_menu.add_checkbutton(label="Mostrar Painel de Propriedades", command=self.toggle_properties)
-        menubar.add_cascade(label="View", menu=view_menu)
-
-        # Ações
-        acoes_menu = tk.Menu(menubar, tearoff=0)
-        acoes_menu.add_command(label="Executar Macro", command=self.executar_macro)
-        acoes_menu.add_command(label="Parar Macro",    command=self.parar_macro)
-        menubar.add_cascade(label="Ações", menu=acoes_menu)
-
-        # Ferramentas
-        tools_menu = tk.Menu(menubar, tearoff=0)
-        tools_menu.add_command(label="Opções...", command=self.abrir_configuracoes)
-        tools_menu.add_command(label="Testar OCR", command=self.testar_ocr)
-        menubar.add_cascade(label="Ferramentas", menu=tools_menu)
-
-        # Ajuda
-        help_menu = tk.Menu(menubar, tearoff=0)
-        help_menu.add_command(label="Documentação", command=self.abrir_documentacao)
-        help_menu.add_separator()
-        help_menu.add_command(label="Sobre", command=self.sobre)
-        menubar.add_cascade(label="Ajuda", menu=help_menu)
-
-        # Associa a barra de menu à janela
-        self.root.config(menu=menubar)
+        #self.root.after(100, process_ui_queue)
 
         # -------- frames e canvas --------------------------
         self.top_frame   = tk.Frame(root, height=50,  bg="#e0e0e0")
@@ -151,11 +98,43 @@ class FlowchartApp:
         self.canvas.pack    (side="right", fill="both", expand=True, padx=6, pady=6)
         #self.canvas.configure(scrollregion=(0, 0, 5000, 5000))
 
+        self.macro_name_label = tk.Label(
+            self.top_frame,
+            text="Macro: <nenhuma>",
+            bg="#e0e0e0",
+            font=("Arial", 10, "italic")
+        )
+        self.macro_name_label.pack(side="right", padx=10)
+        
+        # controla nome + estrela de dirty
+        self._current_macro = None
+        self._dirty = False
+        self._update_macro_label()
+
+        self.menu_frame.pack(side="left", fill="y")
+
         # eventos de controle
         self.pause_event = threading.Event()
         self.stop_event  = threading.Event()
         self.macro_thread = None
         self.status_win   = None
+
+        # -------------- NOVO: fila de chamadas UI -----------------
+        from queue import Queue, Empty
+        self._ui_q   = Queue()                         # fila de tarefas UI
+        self.post_ui = self._ui_q.put                  # helper para enfileirar chamadas ao Tk
+
+        def _drain_ui():
+            try:
+                while True:
+                    fn = self._ui_q.get_nowait()
+                    fn()                              # executa no main-thread
+            except Empty:
+                pass
+            self.root.after(30, _drain_ui)
+
+        self.root.after(30, _drain_ui)
+        
 
         # -----------------------------------------------
         #  ZOOM  +  PAN (arrastar com botão direito)
@@ -202,33 +181,55 @@ class FlowchartApp:
         self._criar_botoes_menu()
         bind_eventos(self.canvas, self.blocos, self.setas, self.root)
     # Métodos de callback (adicione as implementações que desejar)
-    def novo_arquivo(self):         messagebox.showinfo("Novo", "Novo arquivo…")
-    def abrir_arquivo(self):        messagebox.showinfo("Abrir", "Abrir arquivo…")
-    def salvar_arquivo(self):       
-        # Caso 1: macro já existe → atualiza JSON e imagens em place
-        if storage.caminho_macro_real and os.path.isfile(storage.caminho_macro_real):
-            original = storage.caminho_macro_real
-            # exporta estado atual para tmp
-            tmp_path = export_macro_to_tmp(
-                self.blocos.blocks,
-                self._build_arrows_data(),
-                macro_name=os.path.basename(os.path.dirname(original))
-            )
-            # sincroniza imagens para a pasta da macro
-            storage._sincronizar_imagens(tmp_path, os.path.dirname(original))
-            # sobrescreve o JSON definitivo
-            shutil.copy(tmp_path, original)
-            # limpa temporários e atualiza ponteiros
-            storage.limpar_tmp()
-            storage.caminho_macro_real  = original
-            storage.caminho_arquivo_tmp = tmp_path
-            messagebox.showinfo("Salvo", f"Macro atualizada em:\n{original}")
-        else:
-            # Caso 2: primeira vez → gera tmp e abre diálogo de nome
-            export_macro_to_tmp(self.blocos.blocks, self._build_arrows_data())
-            salvar_macro_gui()
-        # marca que não há mais alterações pendentes
+    def novo_arquivo(self):
+        # limpa tudo e reseta estado da macro (mesma lógica do botão Novo)
+        if abs(self._zoom_scale - self._zoom_default) > 1e-3:
+            self._reset_zoom()
+        self.canvas.delete("all")
+        self.blocos = BlocoManager(self.canvas, self)
+        self.setas = SetaManager(self.canvas, self.blocos)
+        bind_eventos(self.canvas, self.blocos, self.setas, self.root)
+        storage.caminho_macro_real = None
+        storage.caminho_arquivo_tmp = None
+        # reseta nome e limpa o "*"
+        self._current_macro = None
         self._dirty = False
+        self._update_macro_label()
+    
+    
+    def abrir_arquivo(self):        show_info("Abrir", "Abrir arquivo…")
+    def salvar_arquivo(self):
+        """Salva a macro no arquivo atual ou, se não existir, abre o diálogo de salvamento."""
+        self._salvar_macro(path=storage.caminho_macro_real)
+    def salvar_como(self):
+        """Sempre pergunta onde salvar o JSON e as imagens."""
+        self._dirty = False
+        self._update_macro_label()
+        self._salvar_macro(path=None, ask_dialog=True)
+
+    def _salvar_macro(self, path=None, ask_dialog=False):
+        """Lógica centralizada para exportar e salvar a macro."""
+        # 1) exporta o estado atual para um arquivo temporário
+        tmp_path = export_macro_to_tmp(
+            self.blocos.blocks,
+            self._build_arrows_data(),
+            macro_name=(os.path.basename(os.path.dirname(path)) if path else None)
+        )
+        # 2) escolhe entre salvar existente ou 'Salvar como...'
+        if ask_dialog or not path or not os.path.isfile(path):
+            # deixa o core.storage cuidar do diálogo e do salvamento completo
+            salvar_macro_gui()
+        else:
+            # consolida JSON e imagens no local existente
+            dest_dir = os.path.dirname(path)
+            storage._sincronizar_imagens(tmp_path, dest_dir)
+            shutil.copy(tmp_path, path)
+            show_info("Macro salva", f"Macro salva em:\n{path}")
+            storage.caminho_macro_real  = path
+            storage.caminho_arquivo_tmp = tmp_path
+        # marca alterações salvas
+        self._dirty = False
+        self._update_macro_label()
     def desfazer(self):             pass
     def refazer(self):              pass
     def copiar(self):               pass
@@ -250,6 +251,13 @@ class FlowchartApp:
                     return self.canvas.itemcget(label_id, "text")
         return block_id
     
+    def _update_macro_label(self):
+        """Atualiza a label de macro no topo, adicionando '*' se houver alterações não salvas."""
+        nome = self._current_macro or "<nenhuma>"
+        self.macro_name_label.config(text=f"Macro: {nome}")
+        sinal = "*" if self._dirty else ""
+        self.macro_name_label.config(text=f"Macro: {nome}{sinal}")
+    
     def executar_macro(self):
         # marca execução via UI (permanece True até o fim da execução real
         storage.macro_running = True
@@ -266,10 +274,16 @@ class FlowchartApp:
         )
 
         # 3) dispara a thread que chama o core com callbacks para UI
+        # cria a janela de status e registra já aqui
         status_win = MacroStatusWindow(
             master=self.root,
             on_close=self.root.deiconify
         )
+        # cria & armazena o evento de stop antes de iniciar a thread
+        self.stop_event = threading.Event()
+        self.status_win  = status_win
+        # —> Não registrar aqui: o root-branch é registrado
+        #     dentro de executar_macro_flow() com o nome vindo do JSON
         self.macro_thread = threading.Thread(
             target=self._run_with_ui,
             args=(tmp_path, status_win),
@@ -279,102 +293,86 @@ class FlowchartApp:
 
     def _run_with_ui(self, json_path: str, status_win: MacroStatusWindow):
         # ------------------------------------------------------------------
-        # Carrega JSON e prepara nomes de thread
+        # Carrega JSON (threads serão adicionadas dinamicamente pelo core)
         # ------------------------------------------------------------------
         with open(json_path, "r", encoding="utf-8") as f:
             data = json.load(f)
 
-        friendly_names      = set()          # para criar os quadros
-        internal2friendly   = {}             # p/ converter "Thread-95" → "UpdateTrade"
-
-        for blk in data.get("blocks", []):
-            params = blk.get("params", {})
-            if params.get("type") == "startthread":
-                fname = params.get("thread_name")
-                if fname:
-                    friendly_names.add(fname)
-
-                # mapeia possíveis nomes internos usados pelo executor
-                internal2friendly[f"Thread-{blk['id']}"] = fname          # ex.: Thread-92
-                for dest_id, fork_kind in params.get("forks", {}).items():
-                    if fork_kind == "Nova Thread":
-                        internal2friendly[f"Thread-{dest_id}"] = fname    # ex.: Thread-95
-
-        # Cria os quadros ANTES da execução (sem “Thread Principal”)
-        status_win.preload_threads(sorted(friendly_names))
+        # 1) cria o evento de parada principal
         stop_evt = threading.Event()
-        # ------------------------------------------------------------------
-        # 2)  Oculta janela principal e prepara execução
-        # ------------------------------------------------------------------
-        self.root.withdraw()           # minimiza janela principal
-
+        self.stop_event = stop_evt
 
         # callbacks ----------------------------------------------------------------
+        # Mapeamento de nomes internos → nomes amigáveis (vazio = mostra sempre o nome original)
+        internal2friendly = {}
+
         def progress_cb(name, step, total):
             display = internal2friendly.get(name, name)
-            status_win.update_progress(display, step, total)
+            self.post_ui(lambda: status_win.update_progress(display, step, total))
 
         def label_cb(name, raw_text):
-            # --- converte “Thread-95” → nome amigável --------------------
-            display = internal2friendly.get(name, name)
+            # exibe exatamente o texto que veio do core
+            display = name
+            self.post_ui(lambda: status_win.update_block(display, raw_text))
 
-            # id do bloco que acabou de rodar
-            block_id = raw_text.rsplit(" ", 1)[-1]
-
-            # ① tenta pegar o rótulo que você escreveu no canvas
-            label_text = self._get_block_label(block_id)
-
-            if label_text and label_text != block_id:
-                # achou label → usa-o diretamente
-                desc = label_text
-            else:
-                # ② fallback: gera descrição baseada no tipo (lógica antiga)
-                bloco = next((b for b in self.blocos.blocks
-                              if str(b["id"]) == str(block_id)), None)
-                if bloco:
-                    acao = bloco.get("acao", {})
-                    tipo = acao.get("type", "").lower()
-                    if tipo == "click":
-                        desc = f"Clique @({acao.get('x')}, {acao.get('y')})"
-                    elif tipo == "delay":
-                        desc = f"Delay de {acao.get('time', 0) // 1000}s"
-                    elif tipo in {"thread", "startthread"}:
-                        desc = f"Thread → {acao.get('thread_name', f'ID {block_id}')}"
-                    else:
-                        desc = tipo.capitalize()
-                else:
-                    parts = raw_text.split()
-                    desc = " ".join(parts[:-1]) if len(parts) > 1 else raw_text
-
-            status_win.update_block(display, desc)
+        # 2) Forçar update da janela de status para garantir que o Toplevel exista
+        self.post_ui(lambda: status_win.win.update_idletasks())
+        # 3) Esconder a janela principal, deixando apenas a de status visível
+        self.post_ui(self.root.withdraw)
 
 
         # ------------------------------------------------------------------
-        # 3) Registrando callback de restart (AGORA que progress_cb e label_cb existem)
-        executar_macro_flow(
-            json_path,
-            progress_callback=progress_cb,
-            label_callback=label_cb,
-            stop_event=stop_evt,
-            status_win=status_win
-        )
+        # 4) Registrando callback de restart (AGORA que progress_cb e label_cb existem)
+        try:
+            executar_macro_flow(
+                json_path,
+                progress_callback=progress_cb,
+                label_callback=label_cb,
+                stop_event=stop_evt,
+                status_win=status_win
+            )
+
+        except ValueError as e:
+            # captura 'e' em err=e  ↓↓↓
+            self.post_ui(lambda err=e: show_error(
+                "Erro ao executar macro", str(err)))
+
+        except Exception as e:
+            # idem aqui
+            self.post_ui(lambda err=e: show_error(
+                "Erro inesperado", f"{type(err).__name__}: {err}"))
 
         # ------------------------------------------------------------------
         # 4) Limpeza final
         # ------------------------------------------------------------------
-        # A janela de status se auto‑fecha quando TODAS as threads sinalizam stop.
+        # A janela de status se aut o‑fecha quando TODAS as threads sinalizam stop.
         # Portanto, não a destruímos aqui; apenas restauramos a janela principal.
-        self.root.after(0, self.root.deiconify)
-        storage.macro_running = False
+        # Aguarda até a macro terminar completamente antes de restaurar a janela principal
+        def wait_and_restore():
+            while storage.macro_running:
+                time.sleep(0.1)
+            self.post_ui(self.root.deiconify)
+        threading.Thread(target=wait_and_restore, daemon=True).start()
 
-    def parar_macro(self):          pass
+    def parar_macro(self):
+        """Para imediatamente a macro que estiver em execução."""
+        import core.storage as storage
+        # desarma flag global
+        storage.macro_running = False
+        # dispara o evento que o executor observa
+        if hasattr(self, 'stop_event'):
+            self.stop_event.set()
+        # fecha a janela de status (se estiver aberta)
+        if hasattr(self, 'status_win') and self.status_win:
+            self.post_ui(self.status_win.destroy)
+            
     def abrir_configuracoes(self):
         dialog = SettingsDialog(self.root)
         dialog.wait_window()
     def testar_ocr(self):
          add_ocr_to_sheet(actions=None, update_list=None, tela=self.root)
     def abrir_documentacao(self):   pass
-    def sobre(self):                messagebox.showinfo("Sobre", "TraderAutoSuite v0.6")
+    def sobre(self):                show_info("Sobre", "TraderAutoSuite v0.6")
     # =====================================================
     # UI helpers
     # =====================================================
@@ -385,16 +383,21 @@ class FlowchartApp:
             ("Carregar",  "load_icon.png"),
             ("Remover",   "remove_icon.png"),
             ("Executar",  "execute_icon.png"),
+            ("Fim Loop",  "endloop_icon.png"),
         ]
         for nome, arquivo in botoes_topo:
             caminho = os.path.join("icons", arquivo)
             if os.path.exists(caminho):
-                img = Image.open(caminho).resize((112, 40), Image.Resampling.LANCZOS)
-                tk_img = ImageTk.PhotoImage(img)
-                self.icones_topo[nome] = tk_img
-                btn = tk.Label(self.top_frame, image=tk_img, cursor="hand2", bg="#e0e0e0")
-                btn.pack(side="left", padx=5, pady=5)
-                btn.bind("<Button-1>", lambda e, n=nome: self.executar_acao_topo(n))
+                icon = carregar_icone(caminho, (112, 40))
+                self.icones_topo[nome] = icon
+                adicionar_botao(
+                    self.top_frame,
+                    icon,
+                    lambda e, n=nome: self.executar_acao_topo(n),
+                    side="left",
+                    padx=5,
+                    pady=5
+                )
             else:
                 print(f"[Aviso] Ícone '{arquivo}' não encontrado.")
 
@@ -415,16 +418,21 @@ class FlowchartApp:
             ("text_to_sheet","text_to_sheet_icon.png"),
             ("Telegram Command","telegram_command_icon.png"),
             ("Run Macro",       "run_macro_icon.png"),
+            ("Variavel",       "variable_icon.png"),
+            ("Se Variavel",       "if_variable_icon.png"),
         ]
         for nome, arquivo in botoes_icone:
             caminho = os.path.join("icons", arquivo)
             if os.path.exists(caminho):
-                img = Image.open(caminho).resize((112, 40), Image.Resampling.LANCZOS)
-                tk_img = ImageTk.PhotoImage(img)
-                self.icones_menu[nome] = tk_img
-                btn = tk.Label(self.menu_frame, image=tk_img, cursor="hand2", bg="#f0f0f0")
-                btn.pack(pady=5, padx=5)
-                btn.bind("<Button-1>", lambda e, n=nome: self.blocos.adicionar_bloco(n, "white"))
+                icon = carregar_icone(caminho, (112, 40))
+                self.icones_menu[nome] = icon
+                adicionar_botao(
+                    self.menu_frame,
+                    icon,
+                    lambda e, n=nome: self.blocos.adicionar_bloco(n, "white"),
+                    padx=5,
+                    pady=5
+                )
             else:
                 print(f"[Aviso] Ícone '{arquivo}' não encontrado.")
         # botão de conectar
@@ -437,18 +445,25 @@ class FlowchartApp:
     # Utilitário: gera lista completa de setas (origem, destino, branch, cor)
     # =====================================================
     def _build_arrows_data(self):
+        """
+        Devolve uma lista [(origem, destino, branch, cor)] exatamente
+        como estão guardados pelo SetaManager – sem deduções nem casts.
+        """
         arrows = []
-        for seta_id, origem, destino in self.setas.setas:
-            info = self.setas._setas_info.get(seta_id)
-            cor = info[2] if info and len(info) >= 3 else \
-                  self.canvas.itemcget(seta_id, "fill").lower()
-            if cor in ("green", "#00ff00", "#0f0"):
-                branch = "true"
-            elif cor in ("red", "#ff0000", "#f00"):
-                branch = "false"
-            else:
-                branch = None
+        vistos = set()               # evita duplicatas (orig_id, dest_id)
+
+        for cid, origem, destino in self.setas.setas:
+            chave = (origem.get("id"), destino.get("id"))
+            if chave in vistos:
+                continue
+            vistos.add(chave)
+
+            info   = self.setas._setas_info.get(cid, {})
+            branch = info.get("branch")          # True / False / None
+            cor    = info.get("color")           # string ou None
+
             arrows.append((origem, destino, branch, cor))
+
         return arrows
 
     # =====================================================
@@ -459,13 +474,17 @@ class FlowchartApp:
         # BOTÃO NOVO  → limpa tudo
         # ------------------------------------------------------------------
         if nome == "Novo":
+            # limpa canvas e reinicia managers
             self.canvas.delete("all")
             self.blocos = BlocoManager(self.canvas, self)
             self.setas  = SetaManager(self.canvas, self.blocos)
             bind_eventos(self.canvas, self.blocos, self.setas, self.root)
-            storage.caminho_macro_real  = None     # zera ponteiro fixo
+            storage.caminho_macro_real  = None
             storage.caminho_arquivo_tmp = None
-            return
+            # reseta nome da macro e limpa o "*"
+            self._current_macro = None
+            self._dirty = False
+            self._update_macro_label()
 
         # ------------------------------------------------------------------
         # BOTÃO SALVAR
@@ -495,11 +514,24 @@ class FlowchartApp:
         if nome == "Executar":
             self.executar_macro()
             return
+        
+        # ------------------------------------------------------------------
+        # BOTÃO FIM LOOP
+        # ------------------------------------------------------------------
+        if nome == "Fim Loop":
+            # insere um bloco de término de loop
+            # cor “white” (ou qualquer cor padrão que você queira)
+            self.blocos.adicionar_bloco("Fim Loop", "white")
+            return
     # -----------------------------------------------------
     # Carregar macro (JSON)
     # -----------------------------------------------------
     def _acao_carregar(self, path=None):
-        # Se veio um path por argumento, usa-o; senão, pergunta ao usuário
+        """Abre um arquivo JSON e reconstrói o canvas via helper centralizado."""
+        # ── garante que o canvas volte a 100 % ─────────────────
+        if abs(self._zoom_scale - self._zoom_default) > 1e-3:
+            self._reset_zoom()
+        # 1) se nenhum path foi passado, pergunta ao usuário
         if path is None:
             path = filedialog.askopenfilename(
                 filetypes=[("JSON", "*.json")],
@@ -507,88 +539,42 @@ class FlowchartApp:
             )
             if not path:
                 return
+
         try:
-            with open(path, "r", encoding="utf-8") as f:
-                data = json.load(f)
-            ids_existentes = [blk["id"] for blk in data.get("blocks", [])]
-            BlocoManager._next_id = max(ids_existentes, default=0) + 1
+            # 2) usa utilitário para limpar e reconstruir tudo
+            from core.storage import rebuild_macro_canvas
 
-            storage.caminho_arquivo_tmp = path
-            storage.caminho_macro_real = path
-            # limpa canvas e recria managers
-            self.canvas.delete("all")
-            self.blocos = BlocoManager(self.canvas, self)
-            self.setas  = SetaManager(self.canvas, self.blocos)
-            bind_eventos(self.canvas, self.blocos, self.setas, self.root)
+            rebuild_macro_canvas(
+                path,
+                canvas=self.canvas,
+                bloco_manager=self.blocos,
+                seta_manager=self.setas,
+                bind_fn=lambda: bind_eventos(self.canvas, self.blocos, self.setas, self.root)
+            )
 
-            # --- recria blocos ----------------------------------
-            id_map = {}
-            for blk in data.get("blocks", []):
-                btype = blk.get("type", "")
-                bloco = self.blocos.adicionar_bloco(btype, "white")
-            
-                # --- calcula novo retângulo ---
-                old_x, old_y = bloco["x"], bloco["y"]          # onde o adicionar_bloco() colocou
-                x, y = blk.get("x", old_x), blk.get("y", old_y)
-                dx, dy = x - old_x, y - old_y                  # delta de deslocamento
-            
-                # --- move o retângulo e ícone ---
-                bx2, by2 = x + bloco["width"], y + bloco["height"]
-                self.canvas.coords(bloco["rect"], x, y, bx2, by2)
-                if bloco.get("icon"):
-                    self.canvas.coords(bloco["icon"], x, y)
-            
-                # --- **move também todos os handles** ---
-                for hid in bloco.get("handles", []):
-                    self.canvas.move(hid, dx, dy)
-                if bloco.get("true_handle"):
-                    self.canvas.move(bloco["true_handle"], dx, dy)
-                if bloco.get("false_handle"):
-                    self.canvas.move(bloco["false_handle"], dx, dy)
-            
-                # actualiza as coordenadas salvas no dicionário do bloco
-                bloco["x"], bloco["y"] = x, y
-                bloco["id"] = blk.get("id")
-                id_map[bloco["id"]] = bloco
+            # limpa hover antigo e reposiciona todos os handlers
+            self.blocos._hovered_block = None
+            for b in self.blocos.blocks:
+                self.blocos._recolocar_handles(b)
 
-                # restaura params → desenha label
-                params = blk.get("params", {})
-                if params:
-                    bloco["acao"] = params
-                    txt = _formatar_rotulo(params)      # ← nova função
-                    cor_label = "blue" if params.get("type") == "startthread" else "black"
-                    bloco["label_id"] = self.canvas.create_text(
-                        x + bloco["width"]/2, y + bloco["height"] + 8,
-                        text=txt, font=("Arial", 9), fill=cor_label
-                    )
+            # ── reposiciona handlers (“⊕”) de todos os blocos carregados
+            for bloco in self.blocos.blocks:
+                self.blocos._recolocar_handles(bloco)
 
-                #     cor_label = "blue" if tipo == "startthread" else "black"
-                #     bloco["label_id"] = self.canvas.create_text(
-                #     x + bloco["width"]/2,
-                #     y + bloco["height"] + 8,
-                #     text=txt,
-                #     font=("Arial", 9),
-                #     fill=cor_label
-                #     )
-                # if blk.get("type","").lower() == "texto":
-                #     params["type"] = "text"
-                # blk["params"] = params
-
-            # --- recria setas -----------------------------------
-            for conn in data.get("connections", []):
-                origem   = id_map.get(conn.get("from"))
-                destino  = id_map.get(conn.get("to"))
-                if not origem or not destino:
-                    continue
-                branch = conn.get("branch")
-                cor    = conn.get("color")
-                if not cor and branch:
-                    cor = "green" if branch == "true" else "red" if branch == "false" else None
-                self.setas.desenhar_linha(origem, destino, cor_override=cor)
-
-            messagebox.showinfo("Carregado", f"Macro carregada de:\n{path}")
+            # marca este JSON como o arquivo ‘real’ da macro,
+            # para que o Salvar apenas sobrescreva sem pedir nome
+            # marca este arquivo como a macro atual e atualiza a label
+            storage.caminho_macro_real   = path
+            storage.caminho_arquivo_tmp  = path
+            # mostra só o nome sem extensão
+            nome = os.path.splitext(os.path.basename(path))[0]
+            # atualiza nome e limpa dirty
+            nome = os.path.splitext(os.path.basename(path))[0]
+            self._current_macro = nome
+            self._dirty = False
+            self._update_macro_label()
         except Exception as exc:
-            messagebox.showerror("Erro ao carregar", str(exc))
+            show_error("Erro ao carregar macro", str(exc))
 
     # =====================================================
     #  Zoom
@@ -617,6 +603,20 @@ class FlowchartApp:
         self.canvas.configure(scrollregion=self.canvas.bbox("all"))
         self._rescale_styles()
         self._update_status()
+
+    def _set_zoom(self, scale):
+        """Aplica um fator de zoom absoluto (1.0 = 100 %)."""
+        # remove escala atual
+        if abs(self._zoom_scale - self._zoom_default) > 1e-6:
+            inv = 1 / self._zoom_scale
+            self.canvas.scale("all", 0, 0, inv, inv)
+
+        # aplica nova escala
+        if abs(scale - 1.0) > 1e-6:
+            self.canvas.scale("all", 0, 0, scale, scale)
+
+        self._zoom_scale = scale
+        self._rescale_styles()
 
 
     # =====================================================
@@ -688,6 +688,23 @@ class FlowchartApp:
             self.canvas.itemconfig(icon_id, image=tk_img)
             bloco["_icon_ref"]   = tk_img     # evita GC
             bloco["_icon_scale"] = new_s      # marca a escala atual
+
+        # ---- D) fonte das LABELS -----------------------------------
+        for bloco in self.blocos.blocks:
+            lbl_id = bloco.get("label_id")
+            if not lbl_id:
+                continue
+
+            tags = self.canvas.gettags(lbl_id)
+            base = next((t for t in tags if t.startswith("fs:")), None)
+            if base is None:
+                self.canvas.addtag_withtag("fs:8", lbl_id)  # 8 pt padrão
+                base_fs = 8
+            else:
+                base_fs = int(base[3:])
+
+            new_fs = max(6, int(base_fs * z))
+            self.canvas.itemconfig(lbl_id, font=("Arial", new_fs))
     
     # ──  método _reset_zoom  (novo) ────────────────────────────────────────
     def _reset_zoom(self, event=None):
@@ -707,8 +724,9 @@ class FlowchartApp:
         self.status.config(text=f"{pct} %")
 
     def _mark_dirty(self):
-        """Marca que houve edição desde o último save."""
+        """Marca que houve edição desde o último save e atualiza o asterisco na label."""
         self._dirty = True
+        self._update_macro_label()
 
     def _on_closing(self):
         """Pergunta antes de fechar se houver alterações não salvas."""
@@ -716,7 +734,7 @@ class FlowchartApp:
             self.root.destroy()
             return
 
-        resp = messagebox.askyesnocancel(
+        resp = ask_yes_no(
             "Salvar alterações",
             "Há alterações não salvas. Deseja salvar antes de sair?"
         )
@@ -733,5 +751,9 @@ class FlowchartApp:
 # ============================================================
 if __name__ == "__main__":
     root = tk.Tk()
+    # ──────────────────────────────────────────────────────────────────────
+    # Substitui a fila de UI: em vez de chamar thread_safe_patch, use thread_utils
+    root.after(30, process_ui_queue)
+    # ——— Agora instancie o app e rode o mainloop normalmente ———
     app = FlowchartApp(root)
     root.mainloop()

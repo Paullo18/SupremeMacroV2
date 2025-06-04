@@ -1,7 +1,11 @@
 import tkinter as tk
-from tkinter import Toplevel, StringVar, BooleanVar, Label, Entry, Button, messagebox, Canvas, Checkbutton
-from PIL import ImageGrab, ImageTk
-import pytesseract, os, cv2, numpy as np
+import tkinter as tk
+from tkinter import Toplevel, StringVar, BooleanVar, Label, Entry, Button, Canvas, Checkbutton
+from core import show_info, show_warning, show_error
+from PIL import ImageGrab
+import pytesseract
+from utils.area_select import select_area
+from utils.live_preview import LivePreview
 
 # # ─── Definição dinâmica do caminho do Tesseract ───────────────
 # import sys
@@ -39,7 +43,6 @@ def add_ocr(actions, update_list, tela, listbox=None, *, initial=None):
     txt_expected = StringVar(value=initial.get('text', '') if initial else '')
     vazio_var    = BooleanVar(value=initial.get('verificar_vazio', False) if initial else False)
     coords = {k: initial.get(k, 0) if initial else 0 for k in ('x', 'y', 'w', 'h')}
-    job = {'id': None}
 
     # --- UI principal ---------------------------------------------
     Label(win, text="Texto esperado:").pack(pady=5, anchor='w', padx=10)
@@ -76,82 +79,41 @@ def add_ocr(actions, update_list, tela, listbox=None, *, initial=None):
     Button(frm, text="OK", width=8, command=lambda: _close(True)).pack(side='left', padx=5)
     Button(frm, text="Cancelar", width=8, command=lambda: _close(False)).pack(side='left', padx=5)
 
-    # --- Thumb & preview ------------------------------------------
-    thumbs = {}
-    def _thumb(img):
-        w, h = 220, 120
-        im = img.copy(); im.thumbnail((w, h))
-        ph = ImageTk.PhotoImage(im)
-        canvas_prev.delete('prev')
-        canvas_prev.create_image(w//2, h//2, image=ph, anchor='center', tags='prev')
-        thumbs['t'] = ph
+    preview = LivePreview(
+        canvas_prev,
+        lambda: (coords['x'], coords['y'],
+                 coords['x']+coords['w'], coords['y']+coords['h'])
+                 if coords['w'] else None,
+        interval=0.30
+    )
 
-    def _refresh():
-        if coords['w'] <= 0 or coords['h'] <= 0:
-            return
-        bbox = (coords['x'], coords['y'], coords['x'] + coords['w'], coords['y'] + coords['h'])
-        try:
-            snap = ImageGrab.grab(bbox=bbox)
-            _thumb(snap)
-        finally:
-            job['id'] = win.after(300, _refresh)
-
-    def _start():
-        if job['id'] is None:
-            _refresh()
-
-    def _stop():
-        if job['id'] is not None:
-            win.after_cancel(job['id'])
-            job['id'] = None
+    _start = preview.start
+    _stop  = preview.stop
 
     # --- Seleção de área -------------------------------------------
         # --- Seleção de área -------------------------------------------
     def selecionar_area():
         win.withdraw()
-        ov = Toplevel(win)
-        ov.attributes('-fullscreen', True)
-        ov.attributes('-alpha', 0.3)
-        ov.configure(bg='black')
-        # garante que ESC no overlay seja capturado
-        ov.grab_set()
-        ov.focus_set()
-
-        cvs = tk.Canvas(ov, cursor='cross')
-        cvs.pack(fill='both', expand=True)
-        rect = [None]
-        sx = sy = 0
-        def down(e):
-            nonlocal sx, sy
-            sx, sy = cvs.canvasx(e.x), cvs.canvasy(e.y)
-            rect[0] = cvs.create_rectangle(sx, sy, sx, sy, outline='red', width=2)
-        def drag(e):
-            cvs.coords(rect[0], sx, sy, cvs.canvasx(e.x), cvs.canvasy(e.y))
-        def up(e):
-            x1, y1, x2, y2 = cvs.coords(rect[0])
-            ov.destroy(); win.deiconify()
-            coords.update({
-                'x': int(min(x1, x2)), 'y': int(min(y1, y2)),
-                'w': int(abs(x2 - x1)), 'h': int(abs(y2 - y1))
-            })
-            lbl_coord.config(text=f"Área: x={coords['x']} y={coords['y']} w={coords['w']} h={coords['h']}")
-            _start()
-        cvs.bind('<Button-1>', down)
-        cvs.bind('<B1-Motion>', drag)
-        cvs.bind('<ButtonRelease-1>', up)
-        # ESC no overlay cancela seleção e retorna
-        ov.bind('<Escape>', lambda e: ov.destroy() or win.deiconify())
+        area = select_area()
+        win.deiconify()
+        if area is None:
+            return
+        x1, y1, x2, y2 = area
+        coords.update({'x': x1, 'y': y1, 'w': x2 - x1, 'h': y2 - y1})
+        lbl_coord.config(text=f"Área: x={coords['x']} y={coords['y']} "
+                              f"w={coords['w']} h={coords['h']}")
+        _start()
 
     btn_sel.configure(command=selecionar_area)
 
     # --- Teste de OCR ----------------------------------------------
     def testar():
         if coords['w'] == 0:
-            messagebox.showwarning('Área', 'Defina a área.'); return
+            show_warning('Área', 'Defina a área.'); return
         bbox = (coords['x'], coords['y'], coords['x'] + coords['w'], coords['y'] + coords['h'])
         img = ImageGrab.grab(bbox=bbox)
         text = pytesseract.image_to_string(img).strip()
-        messagebox.showinfo('OCR Detectado', text or '[vazio]')
+        show_info('OCR Detectado', text or '[vazio]')
     btn_test.configure(command=testar)
 
     # --- Fechar e gravar ação --------------------------------------
@@ -160,7 +122,7 @@ def add_ocr(actions, update_list, tela, listbox=None, *, initial=None):
         if not save:
             win.destroy(); return
         if coords['w'] == 0:
-            messagebox.showerror('Erro', 'Área deve ser definida.'); return
+            show_error('Erro', 'Área deve ser definida.'); return
         ac = {'type': 'ocr', **coords,
               'text': txt_expected.get(),
               'verificar_vazio': vazio_var.get()}

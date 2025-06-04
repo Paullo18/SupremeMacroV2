@@ -20,7 +20,7 @@ class MacroStatusWindow:
         self.on_close = on_close
         self.win = tk.Toplevel(master)
         self.win.title("Status da Macro")
-        self.win.geometry("620x400")
+        self.win.geometry("620x800")
         self.win.attributes("-topmost", True)
 
         # --- contêiner principal em grid para duas colunas
@@ -31,15 +31,28 @@ class MacroStatusWindow:
 
         # armazenamento interno
         self._threads: dict[str, tuple[tk.Widget, ttk.Progressbar, tk.Label]] = {}
-        self._stop_events: dict[str, threading.Event | None] = {}
+        self._stop_events: dict[str, threading.Event | None] = {}        
+        self._placeholder_events: dict[str, threading.Event] = {}    # <<< Inicializa vazio
         self._toggle_buttons: dict[str, tk.Button] = {}
+
+        # ─── Se o usuário passou uma lista de nomes de threads, carregue‐as agora ─────────
+        if thread_names:
+            self.preload_threads(thread_names)
+
+        # ─── Inicia o loop de limpeza de widgets órfãos (se alguma thread já terminou) ────
+        self.win.after(500, self._cleanup_threads)
+
+        # ─── Inicia o loop de “auto‐fechamento”: enquanto existir ao menos um Event não setado, fique aberto ───
+        # (vamos chamar _auto_close_check apenas depois de registrar todos os placeholders)
+        # self.win.after(500, self._auto_close_check)
+
         self._restart_callbacks: dict[str, callable] = {}
         self._threads_ever_created = False
 
-        # pré-criar threads conhecidas
-        if thread_names:
-            for nm in thread_names:
-                self._make_thread_widgets(nm)
+        # (não preciso do segundo loop, pois preload_threads já chamou _make_thread_widgets)
+        # if thread_names:
+        #     for nm in thread_names:
+        #         self._make_thread_widgets(nm)
 
         # botões gerais
         bf = tk.Frame(self.win)
@@ -51,15 +64,23 @@ class MacroStatusWindow:
         tk.Button(bf, text="Stop Todas", width=12, command=self.stop_all).pack(side="right", padx=5)
 
         # ciclos de manutenção
-        self.win.after(500, self._auto_close_check)
+        #self.win.after(500, self._auto_close_check)
         self.win.after(500, self._cleanup_threads)
 
     def preload_threads(self, names: list[str]):
         """
-        Cria (se ainda não existirem) os quadros para cada thread em 'names'.
+        Cria (se ainda não existirem) os quadros para cada thread em 'names'
+        e transfere event placeholders de self._placeholder_events para self._stop_events.
         """
         for name in names:
+            # 1) cria o widget (se ainda não existir)
             self._make_thread_widgets(name)
+
+            # 2) pega o Event placeholder em _placeholder_events (se existir)
+            placeholder_dict = getattr(self, "_placeholder_events", {})
+            evt = placeholder_dict.get(name)
+            if evt:
+                self._stop_events[name] = evt
 
     # ---------- criação de widgets em duas colunas ----------
     def _make_thread_widgets(self, name: str):
@@ -126,8 +147,31 @@ class MacroStatusWindow:
             btn.config(text="Stop")
 
     # ---------- API para execução ----------
-    def register_stop_event(self, name: str, event: threading.Event):
-        self._stop_events[name] = event
+    def register_stop_event(self, name: str, event: threading.Event, restart_callback: callable = None):
+        """
+        Registra o stop_event para the thread 'name' e, se fornecido, também
+        o callback a ser chamado quando o usuário clicar em Play.
+        assinatura do callback: callback(name: str, new_stop_event: threading.Event)
+        """
+        # Precisamos criar o widget NO THREAD PRINCIPAL do Tkinter.
+        def _ensure_widget():
+            if name not in self._threads:
+                self._make_thread_widgets(name)
+            # Armazena o Event usado para parar
+            self._stop_events[name] = event
+            # Se foi passado callback de restart, armazena-o também
+            if restart_callback:
+                self._restart_callbacks[name] = restart_callback
+
+        # Agendamos a criação do widget e armazenamento dos eventos no loop principal
+        try:
+            print(f"[DEBUG STATUS] Registrando placeholder para thread “{name}”")
+            self.win.after(0, _ensure_widget)
+        except Exception:
+            # Se, por algum motivo, a janela já não existir, ainda armazenamos os dados
+            self._stop_events[name] = event
+            if restart_callback:
+                self._restart_callbacks[name] = restart_callback
 
     def update_progress(self, name: str, step: int, total: int):
         if not self.win.winfo_exists():
@@ -154,13 +198,13 @@ class MacroStatusWindow:
 
     # ---------- ações dos botões gerais ----------
     def toggle_pause_all(self):
-        exec_mod.macro_pausar = not exec_mod.macro_pausar
+        paused = exec_mod.toggle_pause()
         self.pause_btn.config(
-            text="Retomar Todas" if exec_mod.macro_pausar else "Pausar Todas"
+            text="Retomar Todas" if paused else "Pausar Todas"
         )
 
     def stop_all(self):
-        exec_mod.macro_parar = True
+        exec_mod.stop_all_macros()
         for evt in self._stop_events.values():
             if evt:
                 evt.set()
@@ -170,7 +214,6 @@ class MacroStatusWindow:
             if self.on_close:
                 self.on_close()
 
-    # ---------- manutenção / encerramento ----------
     # ---------- manutenção / encerramento ----------
     def _cleanup_threads(self):
         """Mantém a lista interna livre de widgets órfãos se a thread for encerrada."""

@@ -1,6 +1,7 @@
 import os
 import tkinter as tk
-from tkinter import Toplevel, Label, Entry, Button, filedialog, messagebox
+from tkinter import Toplevel, Label, Entry, Button, filedialog
+from core import show_error
 from core import storage
 
 
@@ -42,7 +43,7 @@ def add_run_macro(actions, update_list, tela, initial=None):
 
         path = path_var.get().strip()
         if not path or not os.path.isfile(path):
-            messagebox.showerror("Erro", "Arquivo inválido ou não selecionado.")
+            show_error("Erro", "Arquivo inválido ou não selecionado.")
             return
         # libera grab e oculta janela de configuração
         win.grab_release()
@@ -76,7 +77,7 @@ def add_run_macro(actions, update_list, tela, initial=None):
     def on_ok():
         path = path_var.get().strip()
         if not path:
-            messagebox.showerror("Erro", "Selecione um arquivo antes de confirmar.")
+            show_error("Erro", "Selecione um arquivo antes de confirmar.")
             return
         ac = {'type': 'run_macro', 'path': path}
         # grava na lista de actions (para undo/refazer)

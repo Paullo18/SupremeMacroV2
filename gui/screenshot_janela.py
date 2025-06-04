@@ -1,4 +1,3 @@
-import tkinter as tk
 from tkinter import (
     Toplevel,
     Frame,
@@ -15,11 +14,12 @@ from tkinter import (
     messagebox
     )
 
-from PIL import ImageGrab, Image, ImageTk
-from datetime import datetime
-import json, os
+import json
 from pathlib import Path
 from tkinter import ttk
+from utils.area_select import select_area
+from utils.live_preview import LivePreview
+
 # Path para configurações gerais
 CONFIG_PATH = Path(__file__).parent.parent / "settings.json"
 
@@ -125,45 +125,48 @@ def add_screenshot(actions, update_list, tela, *, initial=None):
     # Mensagem customizada
     message_var = StringVar(value=initial.get("custom_message", "") if initial else "")
 
-    job_preview = {"id": None}
     thumbs = {}
 
     # -------------------------------------------------------
-    # Funções auxiliares
+    # Layout  (Canvas + labels)
     # -------------------------------------------------------
-    def _thumb(img, cvs):
-        w, h = int(cvs["width"]), int(cvs["height"])
-        im = img.copy()
-        im.thumbnail((w, h))
-        ph = ImageTk.PhotoImage(im)
-        cvs.delete("all")
-        cvs.create_image(w // 2, h // 2, image=ph, anchor="center")
-        thumbs["main"] = ph
 
-    def _refresh_preview():
-        snap = (
-            ImageGrab.grab()
-            if mode_var.get() == "whole"
-            else ImageGrab.grab(
-                bbox=(
-                    region["x"],
-                    region["y"],
-                    region["x"] + region["w"],
-                    region["y"] + region["h"],
-                )
-            )
-        )
-        _thumb(snap, canvas_main)
-        job_preview["id"] = win.after(500, _refresh_preview)
+    left = Frame(win)
+    right = Frame(win)
+    left.pack(side="left", fill="both", expand=True, padx=10, pady=10)
+    right.pack(side="right", fill="y", padx=10, pady=10)
 
-    def _start_preview():
-        if job_preview["id"] is None:
-            _refresh_preview()
+    canvas_main = Canvas(
+        left,
+        width=400,
+        height=400,
+        bg="#eee",
+        highlightthickness=1,
+        highlightbackground="black",
+    )
+    canvas_main.pack()
+    lbl_title  = Label(left, text="")
+    lbl_title.pack(pady=(5, 0))
+    lbl_coords = Label(left, text="")
+    lbl_coords.pack()
 
-    def _stop_preview():
-        if job_preview["id"] is not None:
-            win.after_cancel(job_preview["id"])
-            job_preview["id"] = None
+    # -------------------------------------------------------
+    # Preview da tela (AGORA que canvas_main existe)
+    # -------------------------------------------------------
+
+    ui_state = {"mode": mode_var.get()}
+
+    preview = LivePreview(
+     canvas_main,
+     lambda: (
+         (region['x'], region['y'],
+          region['x'] + region['w'], region['y'] + region['h'])
+         if ui_state["mode"] == "region" and region.get("w") else None
+     ),
+     interval=0.50
+ )
+    _start_preview = preview.start
+    _stop_preview  = preview.stop
 
     # -------------------------------------------------------
     # Callbacks UI
@@ -213,54 +216,26 @@ def add_screenshot(actions, update_list, tela, *, initial=None):
         entry_msg.config(state=st_msg)
 
     def select_region():
+        # 1) libera o grab da janela de screenshot
+        try:
+            win.grab_release()
+        except:
+            pass
+        # 2) oculta a janela e abre o overlay como filha
         win.withdraw()
-        ov = Toplevel(win)
-        ov.attributes("-fullscreen", True)
-        ov.attributes("-alpha", 0.3)
-        ov.grab_set()
-        ov.focus_force()
-
-        cvs = Canvas(ov, cursor="cross")
-        cvs.pack(fill="both", expand=True)
-
-        rect = [None]
-        sx = sy = 0
-
-        def dn(e):
-            nonlocal sx, sy
-            sx, sy = cvs.canvasx(e.x), cvs.canvasy(e.y)
-            rect[0] = cvs.create_rectangle(sx, sy, sx, sy, outline="red", width=2)
-
-        def dr(e):
-            cvs.coords(rect[0], sx, sy, cvs.canvasx(e.x), cvs.canvasy(e.y))
-
-        def up(e):
-            x1, y1, x2, y2 = cvs.coords(rect[0])
-            ov.destroy()
-            win.deiconify()
-            win.lift()
-            win.focus_force()
-            win.after(10, win.focus_set)
-
-            sx2, sy2 = int(min(x1, x2)), int(min(y1, y2))
-            w2, h2 = int(abs(x2 - x1)), int(abs(y2 - y1))
-            region.update({"x": sx2, "y": sy2, "w": w2, "h": h2})
-            lbl_coords.config(text=f"x={sx2} y={sy2} w={w2} h={h2}")
-            _start_preview()
-
-        cvs.bind("<Button-1>", dn)
-        cvs.bind("<B1-Motion>", dr)
-        cvs.bind("<ButtonRelease-1>", up)
-
-        def _on_overlay_escape(event):
-            ov.destroy()
-            win.deiconify()
-            win.lift()
-            win.focus_force()
-            win.after(10, win.focus_set)
-            return "break"
-
-        ov.bind("<Escape>", _on_overlay_escape)
+        area = select_area(parent=win)
+        # 3) assim que o overlay fechar, restaura tudo
+        win.deiconify()
+        win.lift()
+        win.grab_set()
+        win.focus_force()
+        win.after(10, win.focus_set)
+        if area is None:
+            return
+        x1, y1, x2, y2 = area
+        region.update({"x": x1, "y": y1, "w": x2 - x1, "h": y2 - y1})
+        lbl_coords.config(text=f"x={x1} y={y1} w={x2-x1} h={y2-y1}")
+        _start_preview()
 
     def choose_path():
         folder = filedialog.askdirectory()
@@ -330,19 +305,19 @@ def add_screenshot(actions, update_list, tela, *, initial=None):
     left.pack(side="left", fill="both", expand=True, padx=10, pady=10)
     right.pack(side="right", fill="y", padx=10, pady=10)
 
-    canvas_main = Canvas(
-        left,
-        width=400,
-        height=400,
-        bg="#eee",
-        highlightthickness=1,
-        highlightbackground="black",
-    )
-    canvas_main.pack()
-    lbl_title = Label(left, text="")
-    lbl_title.pack(pady=(5, 0))
-    lbl_coords = Label(left, text="")
-    lbl_coords.pack()
+    # canvas_main = Canvas(
+    #     left,
+    #     width=400,
+    #     height=400,
+    #     bg="#eee",
+    #     highlightthickness=1,
+    #     highlightbackground="black",
+    # )
+    # canvas_main.pack()
+    # lbl_title = Label(left, text="")
+    # lbl_title.pack(pady=(5, 0))
+    # lbl_coords = Label(left, text="")
+    # lbl_coords.pack()
 
     # ------------------------
     # Seção de modos
@@ -433,7 +408,11 @@ def add_screenshot(actions, update_list, tela, *, initial=None):
     update_mode()
     update_behavior()
 
-    win.bind("<Escape>", lambda e: close_window(False))
+    # captura ESC na janela de screenshot e impede que chegue ao editor principal
+    def _on_win_escape(event):
+        close_window(False)
+        return "break"
+    win.bind("<Escape>", _on_win_escape)
     win.deiconify()
     win.attributes("-alpha", 1)
     win.resizable(False, False)

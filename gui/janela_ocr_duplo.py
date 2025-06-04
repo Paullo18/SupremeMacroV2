@@ -3,9 +3,10 @@ from tkinter import (
     Toplevel, StringVar, BooleanVar, Label, Entry,
     Button, messagebox, Radiobutton, Canvas
 )
-from PIL import ImageGrab, ImageTk
+from PIL import ImageGrab
 import pytesseract
-import cv2, numpy as np
+from utils.area_select import select_area
+from utils.live_preview import LivePreview
 
 # ================================================================
 # OCR Duplo – com dois previews ao vivo das áreas selecionadas
@@ -34,8 +35,6 @@ def add_ocr_duplo(actions, atualizar, tela, listbox=None, *, initial=None):
                if initial else 0 for k in ("x","y","w","h")}
     coords2 = {k: initial.get({"x":"x2","y":"y2","w":"w2","h":"h2"}[k], 0)
                if initial else 0 for k in ("x","y","w","h")}
-    job1 = {'id': None}
-    job2 = {'id': None}
 
     # layout
     top = tk.Frame(win); top.pack(fill="x", pady=6)
@@ -74,67 +73,40 @@ def add_ocr_duplo(actions, atualizar, tela, listbox=None, *, initial=None):
     Button(bot, text="OK",      width=8, command=lambda: _close(True)).pack(side="left", padx=6)
     Button(bot, text="Cancelar", width=8, command=lambda: _close(False)).pack(side="left", padx=6)
 
-    # thumbnails & preview
-    thumbs = {}
-    def _thumb(img, cvs, tag):
-        w, h = 220, 120
-        im = img.copy(); im.thumbnail((w, h))
-        ph = ImageTk.PhotoImage(im)
-        cvs.delete(tag)
-        cvs.create_image(w//2, h//2, image=ph, anchor="center", tags=tag)
-        thumbs[tag] = ph
-
-    def _refresh(coords, cvs, tag, job):
-        if coords['w'] == 0: return
-        bbox = (coords['x'], coords['y'], coords['x']+coords['w'], coords['y']+coords['h'])
-        try:
-            snap = ImageGrab.grab(bbox=bbox)
-            _thumb(snap, cvs, tag)
-        finally:
-            job['id'] = win.after(300, lambda: _refresh(coords, cvs, tag, job))
-
-    def _start(job, coords, cvs, tag):
-        if job['id'] is None: _refresh(coords, cvs, tag, job)
-    def _stop(job):
-        if job['id'] is not None:
-            win.after_cancel(job['id']); job['id'] = None
+    # previews ao vivo (LivePreview)
+    preview1 = LivePreview(
+        canvas1,
+        lambda: (coords1['x'], coords1['y'],
+                 coords1['x'] + coords1['w'], coords1['y'] + coords1['h'])
+                 if coords1['w'] else None,
+        interval=0.30
+    )
+    preview2 = LivePreview(
+        canvas2,
+        lambda: (coords2['x'], coords2['y'],
+                 coords2['x'] + coords2['w'], coords2['y'] + coords2['h'])
+                 if coords2['w'] else None,
+        interval=0.30
+    )
 
     # seleção de áreas
     def _select(coords, lbl, cvs, tag, job, color):
         win.withdraw()
-        ov = Toplevel(win)
-        ov.attributes('-fullscreen', True)
-        ov.attributes('-alpha', 0.30)
-        ov.configure(bg="black")
-        ov.grab_set(); ov.focus_set()
+        area = select_area(outline=color)
+        win.deiconify()
+        if area is None:
+            return
+        x1, y1, x2, y2 = area
+        coords.update({'x': x1, 'y': y1, 'w': x2 - x1, 'h': y2 - y1})
+        lbl.config(text=f"x={coords['x']} y={coords['y']} "
+                        f"w={coords['w']} h={coords['h']}")
+        if tag == "prev1":
+            preview1.start()
+        else:
+            preview2.start()
 
-        cvs2 = tk.Canvas(ov, cursor="cross")
-        cvs2.pack(fill="both", expand=True)
-        rect_id, sx, sy = None, 0, 0
-
-        def down(e):
-            nonlocal rect_id, sx, sy
-            sx, sy = cvs2.canvasx(e.x), cvs2.canvasy(e.y)
-            rect_id = cvs2.create_rectangle(sx, sy, sx, sy, outline=color, width=2)
-        def drag(e): cvs2.coords(rect_id, sx, sy, cvs2.canvasx(e.x), cvs2.canvasy(e.y))
-        def up(e):
-            x1, y1, x2, y2 = cvs2.coords(rect_id)
-            ov.destroy(); win.deiconify()
-            coords.update({
-                'x': int(min(x1,x2)), 'y': int(min(y1,y2)),
-                'w': int(abs(x2-x1)), 'h': int(abs(y2-y1))
-            })
-            lbl.config(text=f"x={coords['x']} y={coords['y']} w={coords['w']} h={coords['h']}")
-            _start(job, coords, cvs, tag)
-
-        cvs2.bind("<Button-1>", down)
-        cvs2.bind("<B1-Motion>", drag)
-        cvs2.bind("<ButtonRelease-1>", up)
-        ov.bind("<Escape>", lambda e: ov.destroy() or win.deiconify())
-
-    btn1.configure(command=lambda: _select(coords1, lbl1, canvas1, "prev1", job1, "red"))
-    btn2.configure(command=lambda: _select(coords2, lbl2, canvas2, "prev2", job2, "yellow"))
-
+    btn1.configure(command=lambda: _select(coords1, lbl1, canvas1, "prev1", None, "red"))
+    btn2.configure(command=lambda: _select(coords2, lbl2, canvas2, "prev2", None, "yellow"))
     # teste
     def _test():
         if coords1['w']==0 or coords2['w']==0:
@@ -147,7 +119,7 @@ def add_ocr_duplo(actions, atualizar, tela, listbox=None, *, initial=None):
 
     # fechar e salvar
     def _close(save: bool):
-        _stop(job1); _stop(job2)
+        preview1.stop(); preview2.stop()
         if not save: win.destroy(); return
         if coords1['w']==0 or coords2['w']==0:
             messagebox.showerror("Erro", "Defina ambas as áreas."); return
@@ -170,10 +142,10 @@ def add_ocr_duplo(actions, atualizar, tela, listbox=None, *, initial=None):
     # prévias iniciais
     if coords1['w']>0:
         lbl1.config(text=f"x={coords1['x']} y={coords1['y']} w={coords1['w']} h={coords1['h']}")
-        _start(job1, coords1, canvas1, "prev1")
+        preview1.start()
     if coords2['w']>0:
         lbl2.config(text=f"x={coords2['x']} y={coords2['y']} w={coords2['w']} h={coords2['h']}")
-        _start(job2, coords2, canvas2, "prev2")
+        preview2.start()
 
     # centralizar, bloquear resize, foco e atalhos
     win.update_idletasks()

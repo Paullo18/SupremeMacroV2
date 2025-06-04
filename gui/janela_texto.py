@@ -1,5 +1,6 @@
 import tkinter as tk
-from tkinter import ttk, messagebox
+from tkinter import ttk
+from core import show_warning
 import tkinter.font as tkfont
 import keyboard  # pip install keyboard
 import threading
@@ -184,13 +185,13 @@ def add_texto(actions, update_list, tela, listbox=None, *, initial=None):
         if modo == 'text':
             conteudo = texto_var.get().strip()
             if not conteudo:
-                messagebox.showwarning("Campo vazio", "Digite algum texto antes de confirmar.")
+                show_warning("Campo vazio", "Digite algum texto antes de confirmar.")
                 return
             ac = {"type": "text", "content": conteudo}
         else:
             comando = hotkey_var.get().strip()
             if not comando or comando == PLACEHOLDER:
-                messagebox.showwarning("Campo vazio", "Defina um atalho antes de confirmar.")
+                show_warning("Campo vazio", "Defina um atalho antes de confirmar.")
                 return
             ac = {"type": "hotkey", "command": comando, "content": comando}
 

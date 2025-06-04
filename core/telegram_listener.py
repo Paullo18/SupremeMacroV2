@@ -1,5 +1,5 @@
 import os
-import json
+
 import threading
 import asyncio
 
@@ -10,7 +10,7 @@ from telegram.ext import MessageHandler, filters
 
 import core.storage as storage
 
-from core.executar import executar_macro_flow as run_macro
+from core.executor import execute_macro as run_macro
 from core.config_manager import ConfigManager
 
 # ---------------- helpers -----------------
@@ -44,8 +44,17 @@ _SHUTTING_DOWN   = False  # evita start enquanto o stop não terminou
 _current_stop_event = None
 
 async def _on_startmacro(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # Recarrega config e interrompe se comandos desativados
+    _reload_settings()
+    if not tg_cmd_cfg.get("enabled", False):
+        return
     global _current_stop_event
     chat_id = update.effective_chat.id
+
+    # 1) Recarrega config e, se desativado, ignora esse comando
+    _reload_settings()
+    if not tg_cmd_cfg.get("enabled", False):
+        return
 
     # Previne EXECUÇÃO DUPLICADA (tanto UI quanto headless)
     if getattr(storage, 'macro_running', False) \
@@ -58,13 +67,12 @@ async def _on_startmacro(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await context.bot.send_message(chat_id, "✅ Iniciando macro…")
 
-    # 1) Se a UI estiver rodando, aciona o mesmo fluxo de "Executar" (UI)
+    # 1) Se a UI estiver rodando, enfileira execução na thread principal do Tk
     app_inst = getattr(storage, 'app', None)
     if app_inst:
-        # marca estado de execução e dispara UI
         storage.macro_running = True
-        app_inst.root.after(0, app_inst.executar_macro)
-        await context.bot.send_message(chat_id, "▶️ Macro iniciada.")
+        app_inst.post_ui(app_inst.executar_macro)        # ⬅ usa a fila definida em FlowchartApp :contentReference[oaicite:0]{index=0}
+        await context.bot.send_message(chat_id, "▶️ Macro enfileirada para execução na UI.")
         return
 
     # 2) Fallback headless: escolhe o JSON salvo ou temporário
@@ -95,8 +103,17 @@ async def _on_startmacro(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await context.bot.send_message(chat_id, f"▶️ Macro iniciada: {os.path.basename(macro_path)}")
 
 async def _on_stopmacro(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # Recarrega config e interrompe se comandos desativados
+    _reload_settings()
+    if not tg_cmd_cfg.get("enabled", False):
+        return
     global _current_stop_event
     chat_id = update.effective_chat.id
+
+    # 1) Recarrega config e, se desativado, ignora esse comando
+    _reload_settings()
+    if not tg_cmd_cfg.get("enabled", False):
+        return
 
     # sinaliza parada global
     try:
@@ -124,6 +141,14 @@ async def _on_command(update, context):
     coincidir com o configurado na macro – funciona em chat privado
     e em grupos (onde o Telegram adiciona "@BotUserName").
     """
+    # Recarrega config e interrompe se comandos desativados
+    _reload_settings()
+    if not tg_cmd_cfg.get("enabled", False):
+        return
+    # 1) Recarrega config e, se desativado, ignora esse comando
+    _reload_settings()
+    if not tg_cmd_cfg.get("enabled", False):
+        return
     if not update.message:          # segurança contra updates sem texto
         return
 
@@ -176,9 +201,24 @@ def start_telegram_bot():
         APPLICATION.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, _on_command))
         APPLICATION.add_handler(MessageHandler(filters.COMMAND, _on_command))
 
+        # 1) suprime conflitos de getUpdates criando um error handler
+        from telegram.error import Conflict
+        async def _handle_errors(update, context):
+            err = context.error
+            if isinstance(err, Conflict):
+                print("⚠️ Telegram polling conflict ignorado.")
+            else:
+                print(f"📲 Erro no handler de Telegram: {err}")
+        APPLICATION.add_error_handler(_handle_errors)
+
         print("📲 Telegram listener iniciado.")
-        # bloqueia esta thread até que APPLICATION.stop() seja aguardado
-        APPLICATION.run_polling(stop_signals=None)
+        # 2) bloco principal de polling, com try/except para Conflict
+        try:
+            APPLICATION.run_polling(stop_signals=None)
+        except Conflict:
+            print("⚠️ Telegram polling conflict ignorado.")
+        except Exception as e:
+            print(f"📲 Telegram polling error: {e}")
 
     _BOT_THREAD = threading.Thread(
         target=_thread_target,
@@ -205,11 +245,14 @@ def stop_telegram_bot():
     # agenda o shutdown no loop do listener
     asyncio.run_coroutine_threadsafe(_shutdown(), APPLICATION_LOOP)
 
-    # espera o término em background sem travar a UI
+    # espera o término em background sem travar a UI (não bloqueia pra sempre)
+    import time
     def _wait_and_cleanup():
         global APPLICATION, APPLICATION_LOOP, _BOT_THREAD, _SHUTTING_DOWN
         if _BOT_THREAD and _BOT_THREAD.is_alive():
-            _BOT_THREAD.join()         # bloqueia só nesta thread auxiliar
+            # aguarda até 5 segundos pelo polling encerrar, mas não trava indefinidamente
+            _BOT_THREAD.join(timeout=5)
+        # mesmo que o polling ainda esteja vivo, força o cleanup
         APPLICATION      = None
         APPLICATION_LOOP = None
         _BOT_THREAD      = None

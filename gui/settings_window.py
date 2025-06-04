@@ -13,6 +13,7 @@ class SettingsDialog(tk.Toplevel):
 
         # Carrega configurações via ConfigManager
         self.settings = ConfigManager.load()
+        
         self.sheet_configs = self.settings.get("google_sheets", [])
         self.telegram_configs = self.settings.get("telegram", [])
         self.saved_energy_level = self.settings.get("energy_saving_level", "Desligado")
@@ -24,6 +25,11 @@ class SettingsDialog(tk.Toplevel):
         self.telegram_cmd_enab  = self.telegram_cmd_cfg.get("enabled", True)
         default_bot = self.telegram_configs[0]["name"] if self.telegram_configs else ""
         self.telegram_cmd_bot   = self.telegram_cmd_cfg.get("bot", default_bot)
+
+        # variáveis de controle para “Ativar Comandos do Telegram”
+        # garantem existir mesmo que o usuário não abra a aba antes de salvar
+        self.tg_enabled_var = tk.BooleanVar(value=self.telegram_cmd_enab)
+        self.tg_bot_var     = tk.StringVar( value=self.telegram_cmd_bot )
 
         # Listas de linhas dinâmicas
         self.telegram_vars = []  # tuples: (name_var, token_var, chat_id_var, entry_widgets..., remove_btn)
@@ -289,33 +295,36 @@ class SettingsDialog(tk.Toplevel):
         self.settings["telegram"] = configs or self.telegram_configs
         
         # Sheets
-        self.settings["google_sheets_creds"] = self.gs_var.get()
-        configs = []
+        # Só atualiza as credenciais se o usuário tiver selecionado algo
+        creds = self.gs_var.get().strip()
+        if creds:
+            self.settings["google_sheets_creds"] = creds
+
+        # Reconstrói a lista de sheets; se ficar vazia, mantém a anterior
+        new_sheets = []
         for name_var, id_var, *_ in self.sheet_vars:
             name = name_var.get().strip()
-            sid = id_var.get().strip()
+            sid  = id_var .get().strip()
             if name and sid:
-                configs.append({"name": name, "id": sid})
-        self.settings["google_sheets"] = configs
+                new_sheets.append({"name": name, "id": sid})
+        if new_sheets:
+            self.settings["google_sheets"] = new_sheets
         
         # Economia de Energia
         self.settings["energy_saving_level"] = getattr(self, 'energy_saving_var', tk.StringVar()).get()
 
-        # Telegram Commands (controle remoto)
-        enabled = getattr(self, "tg_enabled_var", tk.BooleanVar(value=True)).get()
-        bot_sel = getattr(self, "tg_bot_var", tk.StringVar(value="")).get()
-        self.settings["telegram_commands"] = {
-            "enabled": enabled,
-            "bot":     bot_sel
-        }
+        # —————— Tele­gram Commands (controle remoto) ——————
+        # 1) captura estado antigo antes de sobrescrever
+        old_cmd     = self.settings.get("telegram_commands", {})
+        old_enabled = old_cmd.get("enabled", False)
+        old_bot     = old_cmd.get("bot", "")
 
-        # Salva configurações
-        ConfigManager.save(self.settings)
+        # 2) lê estado novo da UI
+        enabled = self.tg_enabled_var.get()
+        bot_sel = self.tg_bot_var.get()
 
-        # Liga/desliga listener de acordo com flag
-        # Reinicia o listener para aplicar QUALQUER alteração imediatamente
-        tl.stop_telegram_bot()      # inofensivo se já estiver parado
-        if enabled:                 # religa só se a flag estiver marcada
-            tl.start_telegram_bot()
+        # 3) atualiza settings e salva
+        self.settings["telegram_commands"] = {"enabled": enabled, "bot": bot_sel}
+        ConfigManager.save(self.settings),
 
         self.destroy()
