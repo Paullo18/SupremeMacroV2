@@ -247,13 +247,30 @@ def salvar_macro_gui():
     """
     global caminho_arquivo_tmp, caminho_macro_real
 
-    # ---------------- caso 1: já é uma macro existente ----------------
+    # ================================================================
+    # CASO 1 - a macro JÁ EXISTE em Macros/<nome>
+    # • Cenário A: estamos editando diretamente em Macros/<nome>/macro.json
+    #              (caminho_arquivo_tmp já está no destino definitivo)
+    # • Cenário B: estamos editando uma CÓPIA em tmp/, mas temos
+    #              caminho_macro_real apontando para o arquivo definitivo
+    # ================================================================
+
+    # -------- Cenário A: edição no próprio arquivo dentro de Macros/ ---
     if caminho_arquivo_tmp and macro_em_pasta_macros(caminho_arquivo_tmp):
 
         # se já estamos editando “Macros/<nome>/macro.json”, basta sobrescrever esse JSON:
         if _sobrescrever_macro(caminho_arquivo_tmp, caminho_arquivo_tmp):
             show_info("Salvo", f"Macro atualizada em:\n{caminho_arquivo_tmp}")
         return caminho_arquivo_tmp
+    
+    # -------- Cenário B: edição de cópia temporária --------------------
+    if caminho_macro_real and os.path.isfile(caminho_macro_real):
+        # Atualiza/ move imagens que ainda estejam no tmp/ para Macros/<nome>/img
+        _sincronizar_imagens(caminho_arquivo_tmp, os.path.dirname(caminho_macro_real))
+
+        if _sobrescrever_macro(caminho_arquivo_tmp, caminho_macro_real):
+            show_info("Salvo", f"Macro atualizada em:\n{caminho_macro_real}")
+            return caminho_macro_real
 
     # ---------------- caso 2: macro nova ------------------------------
     if not caminho_arquivo_tmp or not os.path.isfile(caminho_arquivo_tmp):

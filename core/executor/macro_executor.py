@@ -231,7 +231,9 @@ def load_macro_flow(json_path):
     return blocks, next_map, start_nodes[0]
 
 
-def execute_macro(json_path, progress_callback=None, label_callback=None, stop_event=None, status_win=None):
+def execute_macro(json_path, progress_callback=None, label_callback=None,
+                  stop_event=None, status_win=None,
+                  thread_name: str = "Thread Principal"):
     """
     Execute a macro from a JSON file.
     
@@ -322,7 +324,7 @@ def execute_macro(json_path, progress_callback=None, label_callback=None, stop_e
             progress_callback=progress_callback,
             label_callback=label_callback,
             stop_event=stop_event,
-            thread_name="Thread Principal",
+            thread_name=thread_name,
             status_win=status_win
         )
         

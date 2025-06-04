@@ -14,15 +14,22 @@ _ui_queue = Queue()
 
 def schedule_on_main_thread(callback, *args, **kwargs):
     """
-    Schedule a callback to be executed on the main thread.
-    
-    Args:
-        callback: The function to be called on the main thread
-        *args: Positional arguments to pass to the callback
-        **kwargs: Keyword arguments to pass to the callback
+    Agenda uma função para rodar no main-thread.
+    Se o objeto recebido não for chamável, apenas avisa
+    (evita TypeError no process_main_thread_queue) e exibe
+    o stack-trace para localizar o erro original.
     """
-    if callback is not None:
-        _ui_queue.put((callback, args, kwargs))
+    if callback is None:
+        return
+
+    if not callable(callback):
+        print(f"[thread_utils] Warning: objeto não-callable passado para "
+              f"schedule_on_main_thread: {type(callback).__name__}")
+        import traceback
+        traceback.print_stack()
+        return
+
+    _ui_queue.put((callback, args, kwargs))
 
 def process_main_thread_queue():
     """

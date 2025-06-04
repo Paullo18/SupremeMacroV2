@@ -325,12 +325,12 @@ class FlowchartApp:
         # 4) Registrando callback de restart (AGORA que progress_cb e label_cb existem)
         try:
             executar_macro_flow(
-                json_path,
-                progress_callback=progress_cb,
-                label_callback=label_cb,
-                stop_event=stop_evt,
-                status_win=status_win
-            )
+            json_path,
+            progress_callback=progress_cb,
+            label_callback=label_cb,  # ← CORREÇÃO: agora passamos a função label_cb
+            stop_event=stop_evt,
+            status_win=status_win
+        )
 
         except ValueError as e:
             # captura 'e' em err=e  ↓↓↓
