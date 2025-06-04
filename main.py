@@ -36,7 +36,7 @@ def macro_em_pasta_macros(path_):
 class FlowchartApp:
     def __init__(self, root):
         self.root = root
-        self.root.title("TraderAutoSuite v0.9.5")
+        self.root.title("TraderAutoSuite v0.11.9")
 
         # flag para alterações não salvas
         self._dirty = False
