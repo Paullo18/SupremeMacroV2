@@ -4,6 +4,17 @@ from . import register
 import threading
 import core.executor.macro_executor as _executor
 
+# ---------------------------------------------------------------------------
+# Anti-duplicação de threads
+# Mantém um registro das sub-threads já criadas.  Antes de criar uma nova,
+# verifica se outra com o mesmo `internal_name` ainda está viva; se estiver,
+# apenas ignora a nova criação.  Isso impede “multiplicação” de ações quando o
+# fluxo volta a um bloco Start Thread já executado.
+# ---------------------------------------------------------------------------
+
+# { internal_name:str -> threading.Thread }
+
+_active_threads: dict[str, threading.Thread] = {}
 
 @register("startthread")
 def run(params, ctx):
@@ -145,7 +156,12 @@ def run(params, ctx):
             status_win.register_restart_callback(display_name, restart_child)
             placeholder_dict[display_name] = child_evt
 
-        # 5.3) Cria e inicia a sub-thread com o Event (placeholder ou novo)
+        # 5.3) Garante que não existe outra sub-thread viva com o mesmo nome
+        if internal_name in _active_threads and _active_threads[internal_name].is_alive():
+            # Já há uma instância ativa — evita duplicar
+            continue
+
+        # Cria e inicia a sub-thread com o Event (placeholder ou novo)
         th = threading.Thread(
             target=_run_branch,
             name=internal_name,
@@ -163,6 +179,7 @@ def run(params, ctx):
             daemon=True
         )
         th.start()
+        _active_threads[internal_name] = th
 
     # 6) Retorna None para sinalizar que já redirecionamos o fluxo-principal
     return None

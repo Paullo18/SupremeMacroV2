@@ -54,4 +54,8 @@ def append_next_row(sheet_name: str, tab_id: int, column: str, values: list):
     col_values = worksheet.col_values(col_index)
     next_row = len(col_values) + 1
     cell_label = f"{column}{next_row}"
-    worksheet.update(cell_label, values)
+    worksheet.update(
+        cell_label,
+        values,
+        value_input_option="RAW",
+    )
