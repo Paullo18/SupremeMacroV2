@@ -38,6 +38,25 @@ class FlowchartApp:
         self.root = root
         self.root.title("TraderAutoSuite v0.11.9")
 
+        # ---------------------------------------------------------------
+        # Ícone da janela (title-bar, Alt+Tab, barra de tarefas no Linux/macOS)
+        # ---------------------------------------------------------------
+        from pathlib import Path
+        # caminho absoluto para garantir que o ícone seja encontrado
+        icon_path = (Path(__file__).resolve().parent / "assets" / "app_icon.ico")
+
+        # 1) No Windows, .ico é a melhor escolha
+        if icon_path.exists():
+            # title-bar / Alt+Tab (Windows) e quase tudo no Linux
+            root.iconbitmap(default=str(icon_path))
+
+        # 2) Fallback genérico (caso queira aceitar .png também)
+        try:
+            img = tk.PhotoImage(file=icon_path.with_suffix(".png"))
+            root.iconphoto(True, img)
+        except tk.TclError:
+            pass
+
         # flag para alterações não salvas
         self._dirty = False
         # intercepta o “X” da janela
